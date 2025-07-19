@@ -1,9 +1,44 @@
 import os
 import requests
 import json
+import time
+import random
 from strands import tool
 from dotenv import load_dotenv
 from coingecko_tool import search_coin_id, get_coin_details
+
+def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
+    """
+    Retry utility for API calls with exponential backoff.
+    
+    Args:
+        func: Function to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay in seconds
+        backoff_factor: Multiplier for exponential backoff
+    
+    Returns:
+        Result of the function call or None if all retries failed
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries:
+                # Last attempt failed, re-raise the exception
+                raise e
+            
+            # Calculate delay with exponential backoff and jitter
+            delay = min(base_delay * (backoff_factor ** attempt), max_delay)
+            jitter = random.uniform(0, 0.1 * delay)  # Add 10% jitter
+            total_delay = delay + jitter
+            
+            print(f"[DEBUG] API call failed (attempt {attempt + 1}/{max_retries + 1}): {str(e)}")
+            print(f"[DEBUG] Retrying in {total_delay:.2f} seconds...")
+            time.sleep(total_delay)
+    
+    return None
 
 # Load environment variables
 load_dotenv()
@@ -46,14 +81,37 @@ def get_token_address_from_coingecko(symbol: str) -> tuple:
             else:
                 return None, None
                 
+    except requests.exceptions.RequestException as e:
+        print(f"[DEBUG] Network error getting token address from CoinGecko: {e}")
+        return None, None
+    except (ValueError, KeyError) as e:
+        print(f"[DEBUG] Data parsing error getting token address from CoinGecko: {e}")
+        return None, None
     except Exception as e:
-        print(f"[DEBUG] Error getting token address from CoinGecko: {e}")
+        print(f"[DEBUG] Unexpected error getting token address from CoinGecko: {e}")
+        print(f"[DEBUG] Error type: {type(e).__name__}")
         return None, None
 
 # Nansen Tools
 # ------------------------------------------------------------------------------
 def _fetch_nansen_flow_intelligence(chain: str, token_address: str, timeframe: str = "1d") -> dict:
     """Helper to fetch and process smart money flow from Nansen using flow-intelligence for a given timeframe."""
+    # Validate required parameters
+    if not chain or not chain.strip():
+        return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
+    
+    if not token_address or not token_address.strip():
+        return {"status": "error", "result": "Token address parameter is required and cannot be empty."}
+    
+    # Validate chain format
+    valid_chains = ["ethereum", "solana", "polygon", "arbitrum", "avalanche", "base", "bnb"]
+    if chain.lower() not in valid_chains:
+        return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
+    
+    # Validate token address format (basic check)
+    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
+        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
+    
     api_key = os.getenv("NANSEN_API_KEY")
     if not api_key:
         print("[DEBUG] Nansen API key is missing.")
@@ -73,12 +131,18 @@ def _fetch_nansen_flow_intelligence(chain: str, token_address: str, timeframe: s
     print(f"[DEBUG] Fetching Nansen smart money flow for chain: {chain}, token_address: {token_address}, timeframe: {timeframe}")
     print(f"[DEBUG] Payload: {payload}")
 
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
+    def make_nansen_request():
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
         print(f"[DEBUG] Nansen API status code: {response.status_code}")
         print(f"[DEBUG] Nansen API raw response: {response.text}")
         response.raise_for_status()
-        data = response.json()
+        return response.json()
+    
+    try:
+        data = retry_api_call(make_nansen_request)
+        if not data:
+            print(f"[DEBUG] Failed to get Nansen data after retries for {chain}:{token_address}")
+            return {"status": "error", "result": "Failed to fetch Nansen data after retries"}
 
         if not isinstance(data, list) or not data:
             print("[DEBUG] No recent smart money data was found.")
@@ -108,16 +172,49 @@ def _fetch_nansen_flow_intelligence(chain: str, token_address: str, timeframe: s
         }
 
     except requests.exceptions.HTTPError as e:
-        print(f"[DEBUG] Nansen API HTTP error: {e.response.status_code} - {e.response.text}")
-        if e.response.status_code == 404:
+        status_code = e.response.status_code
+        print(f"[DEBUG] Nansen API HTTP error: {status_code} - {e.response.text}")
+        
+        if status_code == 404:
             return {"status": "error", "result": "Unsupported chain or token for Nansen smart money flow."}
-        return {"status": "error", "result": f"Nansen API returned an error: {e.response.status_code} - {e.response.text}"}
+        elif status_code == 401:
+            return {"status": "error", "result": "Nansen API unauthorized - check your API key"}
+        elif status_code == 403:
+            return {"status": "error", "result": "Nansen API access forbidden - check API permissions"}
+        elif status_code == 429:
+            return {"status": "error", "result": "Nansen API rate limit exceeded - try again later"}
+        elif status_code >= 500:
+            return {"status": "error", "result": "Nansen server error - try again later"}
+        else:
+            return {"status": "error", "result": f"Nansen API error: {status_code}"}
+    except requests.exceptions.Timeout as e:
+        print(f"[DEBUG] Nansen API timeout: {e}")
+        return {"status": "error", "result": "Nansen API request timed out - try again"}
+    except requests.exceptions.ConnectionError as e:
+        print(f"[DEBUG] Nansen API connection error: {e}")
+        return {"status": "error", "result": "Cannot connect to Nansen API - check internet connection"}
     except requests.exceptions.RequestException as e:
-        print(f"[DEBUG] Network error connecting to Nansen: {e}")
-        return {"status": "error", "result": f"Network error connecting to Nansen: {e}"}
+        print(f"[DEBUG] Nansen API request error: {e}")
+        return {"status": "error", "result": f"Nansen API request failed: {str(e)}"}
 
 def _fetch_nansen_trading_patterns(chain: str, token_address: str) -> dict:
     """Fetch trading patterns for a token from Nansen (example endpoint, adjust as needed)."""
+    # Validate required parameters
+    if not chain or not chain.strip():
+        return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
+    
+    if not token_address or not token_address.strip():
+        return {"status": "error", "result": "Token address parameter is required and cannot be empty."}
+    
+    # Validate chain format
+    valid_chains = ["ethereum", "solana", "polygon", "arbitrum", "avalanche", "base", "bnb"]
+    if chain.lower() not in valid_chains:
+        return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
+    
+    # Validate token address format (basic check)
+    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
+        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
+    
     api_key = os.getenv("NANSEN_API_KEY")
     if not api_key:
         return {"status": "error", "result": "Nansen API key is missing."}
@@ -130,13 +227,37 @@ def _fetch_nansen_trading_patterns(chain: str, token_address: str) -> dict:
             "tokenAddress": token_address,
         }
     }
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
+    def make_trading_patterns_request():
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
-        data = response.json()
+        return response.json()
+    
+    try:
+        data = retry_api_call(make_trading_patterns_request)
+        if not data:
+            print(f"[DEBUG] Failed to get Nansen trading patterns after retries for {chain}:{token_address}")
+            return {"status": "error", "result": "Failed to fetch trading patterns after retries"}
+            
         return {"status": "success", "result": data}
+    except requests.exceptions.HTTPError as e:
+        print(f"[DEBUG] Nansen trading patterns HTTP error: {e.response.status_code}")
+        return {"status": "error", "result": f"API error: {e.response.status_code}"}
+    except requests.exceptions.RequestException as e:
+        print(f"[DEBUG] Nansen trading patterns network error: {e}")
+        return {"status": "error", "result": f"Network error: {str(e)}"}
+    except (ValueError, KeyError) as e:
+        print(f"[DEBUG] Nansen trading patterns data error: {e}")
+        return {"status": "error", "result": f"Data parsing error: {str(e)}"}
+    except (OSError, IOError) as e:
+        print(f"[DEBUG] Nansen trading patterns system error: {e}")
+        return {"status": "error", "result": f"System error: {str(e)}"}
+    except ImportError as e:
+        print(f"[DEBUG] Nansen trading patterns import error: {e}")
+        return {"status": "error", "result": f"Import error: {str(e)}"}
     except Exception as e:
-        return {"status": "error", "result": str(e)}
+        print(f"[DEBUG] Nansen trading patterns unexpected error: {e}")
+        print(f"[DEBUG] Error type: {type(e).__name__}")
+        return {"status": "error", "result": f"Unexpected error: {str(e)}"}
 
 def get_smart_money_advice(netflow_usd, profitable_trader_flow, profitable_investor_flow):
     advice = []
@@ -178,8 +299,21 @@ def get_comprehensive_smart_money_flow(chain: str, token_address: str) -> dict:
     Returns:
         Dictionary with comprehensive smart money analytics
     """
-    if not all([chain, token_address]):
-        return {"status": "error", "result": "Missing chain or token address."}
+    # Validate required parameters
+    if not chain or not chain.strip():
+        return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
+    
+    if not token_address or not token_address.strip():
+        return {"status": "error", "result": "Token address parameter is required and cannot be empty."}
+    
+    # Validate chain format
+    valid_chains = ["ethereum", "solana", "polygon", "arbitrum", "avalanche", "base", "bnb"]
+    if chain.lower() not in valid_chains:
+        return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
+    
+    # Validate token address format (basic check)
+    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
+        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
 
     api_key = os.getenv("NANSEN_API_KEY")
     if not api_key:
@@ -208,10 +342,20 @@ def get_comprehensive_smart_money_flow(chain: str, token_address: str) -> dict:
             }
         }
 
-        try:
+        def make_comprehensive_request():
             response = requests.post(url, headers=headers, json=payload, timeout=15)
             response.raise_for_status()
-            data = response.json()
+            return response.json()
+        
+        try:
+            data = retry_api_call(make_comprehensive_request)
+            if not data:
+                print(f"[DEBUG] Failed to get comprehensive Nansen data after retries for {label}")
+                comprehensive_data[label] = {
+                    "status": "error",
+                    "result": "Failed to fetch data after retries"
+                }
+                continue
             
             if isinstance(data, list) and data:
                 latest_entry = data[0]
@@ -254,11 +398,36 @@ def get_comprehensive_smart_money_flow(chain: str, token_address: str) -> dict:
                 "status": "error",
                 "result": f"API error: {e.response.status_code}"
             }
-        except Exception as e:
-            print(f"[DEBUG] Error fetching {label} data: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"[DEBUG] Nansen API network error for {label}: {e}")
             comprehensive_data[label] = {
                 "status": "error", 
                 "result": f"Network error: {str(e)}"
+            }
+        except (ValueError, KeyError) as e:
+            print(f"[DEBUG] Nansen API data parsing error for {label}: {e}")
+            comprehensive_data[label] = {
+                "status": "error", 
+                "result": f"Data parsing error: {str(e)}"
+            }
+        except (OSError, IOError) as e:
+            print(f"[DEBUG] Nansen API system error for {label}: {e}")
+            comprehensive_data[label] = {
+                "status": "error", 
+                "result": f"System error: {str(e)}"
+            }
+        except ImportError as e:
+            print(f"[DEBUG] Nansen API import error for {label}: {e}")
+            comprehensive_data[label] = {
+                "status": "error", 
+                "result": f"Import error: {str(e)}"
+            }
+        except Exception as e:
+            print(f"[DEBUG] Nansen API unexpected error for {label}: {e}")
+            print(f"[DEBUG] Error type: {type(e).__name__}")
+            comprehensive_data[label] = {
+                "status": "error", 
+                "result": f"Unexpected error: {str(e)}"
             }
     
     # Generate comprehensive analysis
@@ -357,8 +526,21 @@ def get_token_smart_money_flow(chain: str, token_address: str) -> dict:
     Fetches smart money flow data from Nansen for a specific TOKEN for 24h, 7d, 30d, and trading patterns.
     Adds actionable advice based on smart money and profitable trader/investor flows.
     """
-    if not all([chain, token_address]):
-        return {"status": "error", "result": "Missing chain or token address."}
+    # Validate required parameters
+    if not chain or not chain.strip():
+        return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
+    
+    if not token_address or not token_address.strip():
+        return {"status": "error", "result": "Token address parameter is required and cannot be empty."}
+    
+    # Validate chain format
+    valid_chains = ["ethereum", "solana", "polygon", "arbitrum", "avalanche", "base", "bnb"]
+    if chain.lower() not in valid_chains:
+        return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
+    
+    # Validate token address format (basic check)
+    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
+        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
 
     timeframes = {"24h": "1d", "7d": "7d", "30d": "30d"}
     flows = {}
@@ -397,18 +579,102 @@ def get_native_asset_smart_money_flow(chain: str) -> dict:
     Returns:
         A dictionary with a summary of smart money inflows/outflows for the chain.
     """
-    if not chain:
-        return {"status": "error", "result": "Missing chain name."}
+    # Validate required parameters
+    if not chain or not chain.strip():
+        return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
+    
+    # Validate chain format
+    valid_chains = ["ethereum", "solana", "polygon", "arbitrum", "avalanche", "base", "bnb"]
+    if chain.lower() not in valid_chains:
+        return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
         
+    # Native asset addresses for smart money flow tracking
+    # These are the wrapped versions of native assets that Nansen tracks
     native_asset_addresses = {
-        "solana": "So11111111111111111111111111111111111111112",
-        "ethereum": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "solana": "So11111111111111111111111111111111111111112",  # Wrapped SOL
+        "ethereum": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",  # Wrapped ETH
+        "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",  # Wrapped MATIC
+        "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",  # Wrapped ETH on Arbitrum
+        "avalanche": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7",  # Wrapped AVAX
+        "base": "0x4200000000000000000000000000000000000006",  # Wrapped ETH on Base
+        "bnb": "0xbb4cdb9cbd36b01bd1cbaef2af88c6b9364c9a4f",  # Wrapped BNB
     }
+    
     token_address = native_asset_addresses.get(chain.lower())
     if not token_address:
-        return {"status": "error", "result": f"Smart money flow not supported for native asset on '{chain}'."}
+        return get_alternative_native_asset_analytics(chain)
 
-    return _fetch_nansen_flow_intelligence(chain, token_address)
+    # Try to get smart money flow data
+    result = _fetch_nansen_flow_intelligence(chain, token_address)
+    
+    # If smart money flow fails, provide alternative native asset data
+    if result.get("status") == "error":
+        return get_alternative_native_asset_analytics(chain)
+    
+    return result
+
+def get_alternative_native_asset_analytics(chain: str) -> dict:
+    """
+    Provides alternative analytics for native assets when smart money flow is not available.
+    
+    Args:
+        chain: The blockchain name
+        
+    Returns:
+        Dictionary with alternative analytics and suggestions
+    """
+    chain_analytics = {
+        "ethereum": {
+            "description": "Ethereum native asset (ETH) - focus on gas fees, DeFi TVL, and network activity",
+            "key_metrics": ["Gas fees", "DeFi TVL", "Network transactions", "Staking yield"],
+            "suggestions": ["Monitor gas fee trends", "Check DeFi protocol usage", "Track staking statistics"]
+        },
+        "solana": {
+            "description": "Solana native asset (SOL) - focus on transaction speed, DeFi activity, and staking",
+            "key_metrics": ["TPS (transactions per second)", "DeFi TVL", "Staking yield", "Network fees"],
+            "suggestions": ["Monitor network performance", "Check DeFi protocol growth", "Track staking participation"]
+        },
+        "polygon": {
+            "description": "Polygon native asset (MATIC) - focus on scaling solutions and DeFi adoption",
+            "key_metrics": ["Bridge volume", "DeFi TVL", "Transaction count", "Staking yield"],
+            "suggestions": ["Monitor bridge activity", "Check DeFi protocol usage", "Track staking rewards"]
+        },
+        "arbitrum": {
+            "description": "Arbitrum native asset (ARB) - focus on L2 scaling and DeFi growth",
+            "key_metrics": ["Bridge volume", "DeFi TVL", "Transaction count", "Gas savings"],
+            "suggestions": ["Monitor bridge activity", "Check DeFi protocol growth", "Track gas savings vs L1"]
+        },
+        "avalanche": {
+            "description": "Avalanche native asset (AVAX) - focus on subnet activity and DeFi ecosystem",
+            "key_metrics": ["Subnet activity", "DeFi TVL", "Transaction count", "Staking yield"],
+            "suggestions": ["Monitor subnet growth", "Check DeFi protocol usage", "Track staking participation"]
+        },
+        "base": {
+            "description": "Base native asset - focus on Coinbase ecosystem and DeFi adoption",
+            "key_metrics": ["Bridge volume", "DeFi TVL", "Transaction count", "Coinbase integration"],
+            "suggestions": ["Monitor bridge activity", "Check DeFi protocol growth", "Track Coinbase ecosystem integration"]
+        },
+        "bnb": {
+            "description": "BNB Chain native asset (BNB) - focus on BSC ecosystem and DeFi activity",
+            "key_metrics": ["BSC transaction count", "DeFi TVL", "Staking yield", "Binance integration"],
+            "suggestions": ["Monitor BSC activity", "Check DeFi protocol usage", "Track Binance ecosystem integration"]
+        }
+    }
+    
+    analytics = chain_analytics.get(chain.lower(), {
+        "description": f"{chain.capitalize()} native asset - focus on network fundamentals and ecosystem growth",
+        "key_metrics": ["Network activity", "Transaction volume", "Market cap", "Price action"],
+        "suggestions": ["Monitor network fundamentals", "Check ecosystem growth", "Track price and volume patterns"]
+    })
+    
+    return {
+        "status": "success",
+        "result": f"Smart money flow not available for {chain} native asset. {analytics['description']}",
+        "fallback": True,
+        "alternative_suggestions": analytics["suggestions"],
+        "key_metrics": analytics["key_metrics"],
+        "analytics_type": "alternative_native_asset"
+    }
 
 @tool
 def get_smart_money_flow(symbol: str) -> dict:

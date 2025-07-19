@@ -81,6 +81,10 @@ class GrokModel:
                 print(response.text)
                 raise
             return response.json()
+        except requests.exceptions.Timeout as e:
+            raise TimeoutError(f"Grok API request timed out: {str(e)}")
+        except requests.exceptions.ConnectionError as e:
+            raise ConnectionError(f"Cannot connect to Grok API: {str(e)}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"Grok API request failed: {str(e)}")
     

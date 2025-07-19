@@ -1,8 +1,42 @@
 import random
 import os
+import time
 from strands import tool
 from grok_model import GrokModel
 from dotenv import load_dotenv
+
+def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
+    """
+    Retry utility for API calls with exponential backoff.
+    
+    Args:
+        func: Function to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay in seconds
+        backoff_factor: Multiplier for exponential backoff
+    
+    Returns:
+        Result of the function call or None if all retries failed
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries:
+                # Last attempt failed, re-raise the exception
+                raise e
+            
+            # Calculate delay with exponential backoff and jitter
+            delay = min(base_delay * (backoff_factor ** attempt), max_delay)
+            jitter = random.uniform(0, 0.1 * delay)  # Add 10% jitter
+            total_delay = delay + jitter
+            
+            print(f"[DEBUG] API call failed (attempt {attempt + 1}/{max_retries + 1}): {str(e)}")
+            print(f"[DEBUG] Retrying in {total_delay:.2f} seconds...")
+            time.sleep(total_delay)
+    
+    return None
 
 # Load environment variables
 load_dotenv()
@@ -57,8 +91,14 @@ def handle_conversation(user_input: str) -> str:
             {"role": "user", "content": user_input}
         ]
         
-        # Get response from Grok
-        response = grok_model.chat_completion(messages)
+        # Get response from Grok with retry logic
+        def make_grok_request():
+            return grok_model.chat_completion(messages)
+        
+        response = retry_api_call(make_grok_request)
+        if not response:
+            print(f"[DEBUG] Failed to get Grok response after retries")
+            return fallback_conversation_response(user_input_lower)
         
         if isinstance(response, dict) and "choices" in response and response["choices"]:
             content = response["choices"][0]["message"]["content"]
@@ -66,8 +106,24 @@ def handle_conversation(user_input: str) -> str:
         else:
             return fallback_conversation_response(user_input_lower)
             
+    except TimeoutError as e:
+        print(f"[DEBUG] Grok conversation timeout: {e}")
+        return fallback_conversation_response(user_input_lower)
+    except ConnectionError as e:
+        print(f"[DEBUG] Grok conversation connection error: {e}")
+        return fallback_conversation_response(user_input_lower)
+    except (ValueError, KeyError) as e:
+        print(f"[DEBUG] Grok conversation data error: {e}")
+        return fallback_conversation_response(user_input_lower)
+    except (OSError, IOError) as e:
+        print(f"[DEBUG] Grok conversation system error: {e}")
+        return fallback_conversation_response(user_input_lower)
+    except ImportError as e:
+        print(f"[DEBUG] Grok conversation import error: {e}")
+        return fallback_conversation_response(user_input_lower)
     except Exception as e:
-        print(f"[DEBUG] Grok conversation error: {e}")
+        print(f"[DEBUG] Grok conversation unexpected error: {e}")
+        print(f"[DEBUG] Error type: {type(e).__name__}")
         return fallback_conversation_response(user_input_lower)
 
 def fallback_conversation_response(user_input_lower: str) -> str:

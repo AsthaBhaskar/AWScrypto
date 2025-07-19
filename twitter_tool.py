@@ -1,12 +1,56 @@
 import os
 import requests
+import time
+import random
 from strands import tool
 from dotenv import load_dotenv
 from textblob import TextBlob
-import time
+
+def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
+    """
+    Retry utility for API calls with exponential backoff.
+    
+    Args:
+        func: Function to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay in seconds
+        backoff_factor: Multiplier for exponential backoff
+    
+    Returns:
+        Result of the function call or None if all retries failed
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries:
+                # Last attempt failed, re-raise the exception
+                raise e
+            
+            # Calculate delay with exponential backoff and jitter
+            delay = min(base_delay * (backoff_factor ** attempt), max_delay)
+            jitter = random.uniform(0, 0.1 * delay)  # Add 10% jitter
+            total_delay = delay + jitter
+            
+            print(f"[DEBUG] API call failed (attempt {attempt + 1}/{max_retries + 1}): {str(e)}")
+            print(f"[DEBUG] Retrying in {total_delay:.2f} seconds...")
+            time.sleep(total_delay)
+    
+    return None
 
 # Load environment variables
 load_dotenv()
+
+"""
+Twitter API Integration for Social Sentiment Analysis
+
+Required Environment Variable:
+- TWITTER_BEARER_TOKEN: Twitter API v2 Bearer token for authentication
+
+Note: This tool uses Twitter API v2 with Bearer token authentication.
+TWITTER_API_KEY and TWITTER_API_SECRET are not used.
+"""
 
 TWITTER_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 
@@ -72,17 +116,55 @@ def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 5
     while fetched < max_tweets:
         if next_token:
             params["next_token"] = next_token
-        resp = requests.get(TWITTER_SEARCH_URL, headers=headers, params=params)
-        if resp.status_code != 200:
+            
+        def make_twitter_request():
+            response = requests.get(TWITTER_SEARCH_URL, headers=headers, params=params, timeout=15)
+            response.raise_for_status()
+            return response.json()
+        
+        try:
+            data = retry_api_call(make_twitter_request)
+            if not data:
+                print(f"[DEBUG] Failed to fetch tweets from Twitter after retries for {symbol}")
+                break
+                
+            batch = data.get("data", [])
+            tweets.extend(batch)
+            fetched += len(batch)
+            next_token = data.get("meta", {}).get("next_token")
+            if not next_token or len(tweets) >= max_tweets:
+                break
+            time.sleep(1)  # Rate limit safety
+            
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            print(f"[DEBUG] Twitter API HTTP error: {status_code}")
+            
+            if status_code == 429:
+                print("[DEBUG] Twitter rate limit exceeded, stopping tweet fetch")
+                break
+            elif status_code == 401:
+                print("[DEBUG] Twitter API unauthorized - check bearer token")
+                break
+            elif status_code == 403:
+                print("[DEBUG] Twitter API forbidden - check API permissions")
+                break
+            elif status_code >= 500:
+                print("[DEBUG] Twitter server error, stopping tweet fetch")
+                break
+            else:
+                print(f"[DEBUG] Twitter API error {status_code}, stopping tweet fetch")
+                break
+                
+        except requests.exceptions.Timeout as e:
+            print(f"[DEBUG] Twitter API timeout: {e}")
             break
-        data = resp.json()
-        batch = data.get("data", [])
-        tweets.extend(batch)
-        fetched += len(batch)
-        next_token = data.get("meta", {}).get("next_token")
-        if not next_token or len(tweets) >= max_tweets:
+        except requests.exceptions.ConnectionError as e:
+            print(f"[DEBUG] Twitter API connection error: {e}")
             break
-        time.sleep(1)  # Rate limit safety
+        except Exception as e:
+            print(f"[DEBUG] Twitter API unexpected error: {e}")
+            break
     tweets = tweets[:max_tweets]
 
     # Additional filtering: Only keep tweets that actually mention the crypto token

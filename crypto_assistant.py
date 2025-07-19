@@ -2,21 +2,96 @@
 """
 Naomi - Crypto Assistant powered by xAI Grok and AWS Strands
 Replicated from Google ADK crypto bot functionality
+
+Required Environment Variables (.env file):
+- GROK_API_KEY: Required - xAI Grok API key for AI responses
+- COINGECKO_API_KEY: Optional - CoinGecko Pro API key (falls back to free tier)
+- NANSEN_API_KEY: Optional - Nansen API key for smart money analytics
+- TWITTER_BEARER_TOKEN: Optional - Twitter API v2 Bearer token for social sentiment
+
+Note: TWITTER_API_KEY and TWITTER_API_SECRET are not used by this application.
+The Twitter integration uses Bearer token authentication only.
 """
 
 import os
 import re
 import difflib
+import logging
+import time
+import random
 from dotenv import load_dotenv
 from strands import Agent
 from grok_model import GrokModel
 from coingecko_tool import search_coin_id, get_coin_details, get_historical_performance
-from nansen_tool import get_onchain_analytics, get_smart_money_flow, get_whale_movements, get_native_asset_smart_money_flow, get_token_smart_money_flow
+from nansen_tool import get_onchain_analytics, get_smart_money_flow, get_native_asset_smart_money_flow, get_token_smart_money_flow
 from twitter_tool import get_social_sentiment, get_trending_hashtags, get_influencer_mentions
 from conversation_tool import handle_conversation
 
 # Load environment variables
 load_dotenv()
+
+def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
+    """
+    Retry utility for API calls with exponential backoff.
+    
+    Args:
+        func: Function to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay in seconds
+        backoff_factor: Multiplier for exponential backoff
+    
+    Returns:
+        Result of the function call or None if all retries failed
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries:
+                # Last attempt failed, re-raise the exception
+                raise e
+            
+            # Calculate delay with exponential backoff and jitter
+            delay = min(base_delay * (backoff_factor ** attempt), max_delay)
+            jitter = random.uniform(0, 0.1 * delay)  # Add 10% jitter
+            total_delay = delay + jitter
+            
+            print(f"[DEBUG] API call failed (attempt {attempt + 1}/{max_retries + 1}): {str(e)}")
+            print(f"[DEBUG] Retrying in {total_delay:.2f} seconds...")
+            time.sleep(total_delay)
+    
+    return None
+
+def check_network_connectivity():
+    """
+    Check basic network connectivity to help diagnose connection issues.
+    """
+    import requests
+    
+    test_urls = [
+        "https://api.coingecko.com/api/v3/ping",
+        "https://api.x.ai/v1/models",
+        "https://api.twitter.com/2/tweets/search/recent"
+    ]
+    
+    results = {}
+    for url in test_urls:
+        try:
+            response = requests.get(url, timeout=5)
+            results[url] = {
+                "status": "connected",
+                "status_code": response.status_code,
+                "response_time": response.elapsed.total_seconds()
+            }
+        except requests.exceptions.ConnectionError:
+            results[url] = {"status": "connection_failed"}
+        except requests.exceptions.Timeout:
+            results[url] = {"status": "timeout"}
+        except Exception as e:
+            results[url] = {"status": "error", "error": str(e)}
+    
+    return results
 
 NAOMI_SYSTEM_PROMPT = '''
 You are Naomi, a sharp-witted, Gen Z crypto market analyst created by Insight Labs AI. You are confident and you ALWAYS back up your sass with hard data. But never mention having the sass or the technology used in the backend like nansen, coingecko, twitter, grok 4, etc. 
@@ -74,7 +149,7 @@ def is_prohibited_content(user_input):
     
     # Check if this is a legitimate crypto query first
     crypto_indicators = [
-        "price", "market", "cap", "volume", "change", "performance", "chart", "token", "coin", "crypto", "blockchain", "defi", "nft", "mining", "staking", "yield", "liquidity", "swap", "trade", "buy", "sell", "hodl", "moon", "pump", "dump", "bull", "bear", "altcoin", "meme", "utility", "use case", "adoption", "partnership", "development", "roadmap", "whitepaper", "tokenomics", "circulating", "supply", "burn", "mint", "governance", "dao", "smart contract", "gas", "fee", "transaction", "wallet", "exchange", "dex", "cex", "amm", "liquidity pool", "yield farming", "lending", "borrowing", "collateral", "oracle", "bridge", "layer", "scaling", "consensus", "proof", "validator", "node", "network", "protocol", "dapp", "web3", "metaverse", "gamefi", "play to earn", "move to earn", "learn to earn", "socialfi", "creator economy", "royalties", "fractional", "synthetic", "derivative", "futures", "options", "perpetual", "leverage", "margin", "short", "long", "hedge", "arbitrage", "front running", "mev", "sandwich", "flash loan", "reentrancy", "rug pull", "honeypot", "scam", "legitimate", "audit", "security", "vulnerability", "exploit", "hack", "theft", "recovery", "insurance", "regulation", "compliance", "kyc", "aml", "tax", "reporting", "legal", "illegal", "banned", "restricted", "geoblocked", "vpn", "privacy", "anonymous", "pseudonymous", "transparent", "immutable", "decentralized", "centralized", "permissionless", "permissioned", "public", "private", "consortium", "hybrid", "sidechain", "rollup", "sharding", "fork", "upgrade", "hard fork", "soft fork", "backward compatible", "breaking change", "migration", "airdrop", "claim", "vesting", "lockup", "unlock", "release", "distribution", "allocation", "team", "foundation", "treasury", "reserve", "backing", "collateralized", "algorithmic", "stablecoin", "pegged", "floating", "volatile", "correlation", "beta", "alpha", "sharpe ratio", "risk", "reward", "volatility", "liquidity", "depth", "spread", "slippage", "impact", "market maker", "order book", "limit order", "market order", "stop loss", "take profit", "dca", "hodl", "diamond hands", "paper hands", "fomo", "fud", "shill", "moonboy", "maxi", "fanboy", "hater", "skeptic", "believer", "adopter", "early", "late", "fomo", "fud", "shill", "moonboy", "maxi", "fanboy", "hater", "skeptic", "believer", "adopter", "early", "late", "whale", "shark", "minnow", "dolphin", "octopus", "squid", "ape", "diamond", "paper", "rocket", "moon", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "galaxy", "universe", "cosmos", "polkadot", "cardano", "solana", "avalanche", "polygon", "binance", "coinbase", "kraken", "kucoin", "okx", "bybit", "huobi", "gate", "mexc", "bitget", "whitebit", "bitfinex", "gemini", "ftx", "celsius", "voyager", "blockfi", "nexo", "crypto.com", "robinhood", "webull", "etoro", "tradingview", "coingecko", "coinmarketcap", "messari", "glassnode", "santiment", "lunar", "intotheblock", "skew", "deribit", "okex", "bitmex"
+        "price", "market", "cap", "volume", "change", "performance", "chart", "token", "coin", "crypto", "blockchain", "defi", "nft", "mining", "staking", "yield", "liquidity", "swap", "trade", "buy", "sell", "hodl", "moon", "pump", "dump", "bull", "bear", "altcoin", "meme", "utility", "use case", "adoption", "partnership", "development", "roadmap", "whitepaper", "tokenomics", "circulating", "supply", "burn", "mint", "governance", "dao", "smart contract", "gas", "fee", "transaction", "wallet", "exchange", "dex", "cex", "amm", "liquidity pool", "yield farming", "lending", "borrowing", "collateral", "oracle", "bridge", "layer", "scaling", "consensus", "proof", "validator", "node", "network", "protocol", "dapp", "web3", "metaverse", "gamefi", "play to earn", "move to earn", "learn to earn", "socialfi", "creator economy", "royalties", "fractional", "synthetic", "derivative", "futures", "options", "perpetual", "leverage", "margin", "short", "long", "hedge", "arbitrage", "front running", "mev", "sandwich", "flash loan", "reentrancy", "rug pull", "honeypot", "scam", "legitimate", "audit", "security", "vulnerability", "exploit", "hack", "theft", "recovery", "insurance", "regulation", "compliance", "kyc", "aml", "tax", "reporting", "legal", "illegal", "banned", "restricted", "geoblocked", "vpn", "privacy", "anonymous", "pseudonymous", "transparent", "immutable", "decentralized", "centralized", "permissionless", "permissioned", "public", "private", "consortium", "hybrid", "sidechain", "rollup", "sharding", "fork", "upgrade", "hard fork", "soft fork", "backward compatible", "breaking change", "migration", "airdrop", "claim", "vesting", "lockup", "unlock", "release", "distribution", "allocation", "team", "foundation", "treasury", "reserve", "backing", "collateralized", "algorithmic", "stablecoin", "pegged", "floating", "volatile", "correlation", "beta", "alpha", "sharpe ratio", "risk", "reward", "volatility", "liquidity", "depth", "spread", "slippage", "impact", "market maker", "order book", "limit order", "market order", "stop loss", "take profit", "dca", "hodl", "diamond hands", "paper hands", "fomo", "fud", "shill", "moonboy", "maxi", "fanboy", "hater", "skeptic", "believer", "adopter", "early", "late", "fomo", "fud", "shill", "moonboy", "maxi", "fanboy", "hater", "skeptic", "believer", "adopter", "early", "late", "shark", "minnow", "dolphin", "octopus", "squid", "ape", "diamond", "paper", "rocket", "moon", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "galaxy", "universe", "cosmos", "polkadot", "cardano", "solana", "avalanche", "polygon", "binance", "coinbase", "kraken", "kucoin", "okx", "bybit", "huobi", "gate", "mexc", "bitget", "whitebit", "bitfinex", "gemini", "ftx", "celsius", "voyager", "blockfi", "nexo", "crypto.com", "robinhood", "webull", "etoro", "tradingview", "coingecko", "coinmarketcap", "messari", "glassnode", "santiment", "lunar", "intotheblock", "skew", "deribit", "okex", "bitmex"
     ]
     
     # If the query contains crypto-related terms, be more lenient
@@ -161,7 +236,7 @@ def classify_intent(user_input: str) -> dict:
     timeframe_patterns = {"1h": r"1h|1 hour|last hour", "24h": r"24h|24 hours|day|today|yesterday", "7d": r"7d|7 days|week", "30d": r"30d|30 days|month"}
     
     # Smart money/on-chain patterns
-    onchain_patterns = [r"whale", r"smart money", r"on.?chain", r"flow", r"wallet", r"transfer", r"movement", r"working", r"playing"]
+    onchain_patterns = [r"smart money", r"on.?chain", r"flow", r"wallet", r"transfer", r"movement", r"working", r"playing"]
     
     # Social sentiment patterns
     social_patterns = [r"sentiment", r"twitter", r"social", r"community", r"hype", r"news", r"rumor"]
@@ -181,7 +256,7 @@ def classify_intent(user_input: str) -> dict:
             r"tell\s+me\s+about\s+(\w+)",  # "tell me about bitcoin"
             r"(\w+)\s+(?:price|performance|chart|data)",  # "bitcoin price", "eth performance"
             r"(\w+)\s+(?:doing|performing|trading)",  # "bitcoin doing", "eth performing"
-            r"(\w+)\s+(?:smart\s+money|whale|flow)",  # "bitcoin smart money", "eth whale"
+            r"(\w+)\s+(?:smart\s+money|flow)",  # "bitcoin smart money", "eth flow"
             r"(\w+)\s+(?:sentiment|social|twitter)",  # "bitcoin sentiment", "eth social"
         ]
         
@@ -249,8 +324,26 @@ def generate_simple_charts(price_data, smart_money_data, social_sentiment):
             charts.append(f"24h: {'🟢' if price_24h > 0 else '🔴'} {price_24h:+.2f}%")
             charts.append(f"7d:  {'🟢' if price_7d > 0 else '🔴'} {price_7d:+.2f}%")
             charts.append("")
-        except:
-            pass
+        except (ValueError, TypeError) as e:
+            # Handle invalid price data gracefully
+            charts.append("📈 Price Performance: Data unavailable")
+            charts.append("")
+        except (KeyError, AttributeError) as e:
+            # Handle missing data structure issues
+            print(f"Warning: Invalid price data structure: {str(e)}")
+            charts.append("📈 Price Performance: Data unavailable")
+            charts.append("")
+        except (OSError, IOError) as e:
+            # Handle system-level errors
+            print(f"Warning: System error generating price charts: {str(e)}")
+            charts.append("📈 Price Performance: Data unavailable")
+            charts.append("")
+        except Exception as e:
+            # Log unexpected errors but don't crash - this should rarely be reached
+            print(f"Warning: Unexpected error generating price charts: {str(e)}")
+            print(f"Error type: {type(e).__name__}")
+            charts.append("📈 Price Performance: Data unavailable")
+            charts.append("")
     
     # Smart money flow chart
     if smart_money_data and "data" in smart_money_data:
@@ -285,21 +378,81 @@ def generate_simple_charts(price_data, smart_money_data, social_sentiment):
 def main():
     """Main function that orchestrates the crypto analysis workflow."""
     global violation_count
+    
+    # Set up basic logging for AWS deployment
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('crypto_assistant.log') if os.path.exists('/tmp') else logging.NullHandler()
+        ]
+    )
+    logger = logging.getLogger(__name__)
+    
+    # Validate environment variables
     grok_api_key = os.getenv("GROK_API_KEY")
     if not grok_api_key:
+        logger.error("GROK_API_KEY not found in environment variables")
         print("❌ GROK_API_KEY not found in environment variables")
+        print("Please set the GROK_API_KEY environment variable to use this application.")
         return
     
-    grok_model = GrokModel(
-        client_args={"api_key": grok_api_key},
-        model_id="grok-3",
-        params={"max_tokens": 1000, "temperature": 0.7}
-    )
+    # Check for other optional API keys
+    coingecko_api_key = os.getenv("COINGECKO_API_KEY")
+    nansen_api_key = os.getenv("NANSEN_API_KEY")
+    twitter_api_key = os.getenv("TWITTER_BEARER_TOKEN")
+    
+    if not coingecko_api_key:
+        logger.warning("COINGECKO_API_KEY not found - will use free tier with rate limits")
+        print("⚠️  COINGECKO_API_KEY not found - using free tier (rate limited)")
+    if not nansen_api_key:
+        logger.warning("NANSEN_API_KEY not found - smart money features will be limited")
+        print("⚠️  NANSEN_API_KEY not found - smart money analytics will be unavailable")
+        print("   Add NANSEN_API_KEY to your .env file for smart money flow data")
+    if not twitter_api_key:
+        logger.warning("TWITTER_BEARER_TOKEN not found - social sentiment features will be limited")
+        print("⚠️  TWITTER_BEARER_TOKEN not found - social sentiment will be unavailable")
+        print("   Add TWITTER_BEARER_TOKEN to your .env file for social sentiment analysis")
+        print("   Note: TWITTER_API_KEY and TWITTER_API_SECRET are not used by this application")
+    
+    try:
+        grok_model = GrokModel(
+            client_args={"api_key": grok_api_key},
+            model_id="grok-3",
+            params={"max_tokens": 1000, "temperature": 0.7}
+        )
+        logger.info("Grok model initialized successfully")
+    except (ValueError, KeyError) as e:
+        logger.error(f"Invalid configuration for Grok model: {e}")
+        print(f"❌ Invalid configuration for Grok model: {e}")
+        print("Please check your GROK_API_KEY and model parameters.")
+        return
+    except ConnectionError as e:
+        logger.error(f"Network error initializing Grok model: {e}")
+        print(f"❌ Network error: Cannot connect to Grok API. Check your internet connection.")
+        return
+    except TimeoutError as e:
+        logger.error(f"Timeout initializing Grok model: {e}")
+        print(f"❌ Timeout: Grok API is not responding. Please try again later.")
+        return
+    except ImportError as e:
+        logger.error(f"Import error with Grok model: {e}")
+        print(f"❌ Import error: Required dependencies not found. Please check your installation.")
+        return
+    except Exception as e:
+        logger.error(f"Unexpected error initializing Grok model: {e}")
+        print(f"❌ Failed to initialize Grok model: {e}")
+        print(f"Error type: {type(e).__name__}")
+        return
     
     print("\n🟣 Naomi Crypto Assistant (Strands+Grok4) 🟣\n")
     print("Ask me anything about crypto, blockchain, or NFTs!")
     print("Type 'exit' to quit.")
     conversation = []
+    
+    logger.info("Crypto assistant started successfully")
     
     while True:
         try:
@@ -307,6 +460,29 @@ def main():
             if user_input.lower() == "exit":
                 print("\nNaomi: Later, legend! Keep those crypto vibes flowing! ")
                 break
+            
+            # Check for network diagnostic command
+            if user_input.lower().strip() in ["network", "connection", "connectivity", "ping", "test connection"]:
+                print("Naomi: 🔍 Checking network connectivity...")
+                connectivity_results = check_network_connectivity()
+                
+                print("\n📊 Network Status Report:")
+                for url, result in connectivity_results.items():
+                    service_name = url.split("//")[1].split("/")[0]
+                    if result["status"] == "connected":
+                        print(f"✅ {service_name}: Connected ({result['response_time']:.2f}s)")
+                    elif result["status"] == "connection_failed":
+                        print(f"❌ {service_name}: Connection failed")
+                    elif result["status"] == "timeout":
+                        print(f"⏰ {service_name}: Timeout")
+                    else:
+                        print(f"⚠️ {service_name}: Error - {result.get('error', 'Unknown')}")
+                
+                print("\n💡 If you see connection issues, try:")
+                print("• Checking your internet connection")
+                print("• Restarting your network/router")
+                print("• Checking if the services are down")
+                continue
                 
             # Content safety filtering
             if is_prohibited_content(user_input):
@@ -342,18 +518,59 @@ def main():
             
             # Step 1: Search for the coin on CoinGecko
             print(f"🔍 Searching for {symbol.upper()}...")
-            coin_id = search_coin_id(symbol)
-            
-            if not coin_id:
-                print(f"Naomi: Oops! I couldn't find {symbol.upper()} on CoinGecko. Maybe try a different spelling or check if it's listed? 🤷‍♀️")
+            try:
+                coin_id = search_coin_id(symbol)
+                
+                if not coin_id or not coin_id.strip():
+                    print(f"Naomi: Oops! I couldn't find {symbol.upper()} on CoinGecko. Maybe try a different spelling or check if it's listed? 🤷‍♀️")
+                    continue
+                
+                # Validate coin_id format (should be alphanumeric with hyphens)
+                if not re.match(r'^[a-zA-Z0-9-]+$', coin_id):
+                    print(f"Naomi: Invalid coin ID format for {symbol.upper()}. Please try a different symbol or check the spelling.")
+                    continue
+            except ConnectionError as e:
+                logger.error(f"Network error searching for coin {symbol}: {e}")
+                print(f"Naomi: Network issues! Can't connect to CoinGecko right now. Check your internet connection! 🌐")
+                continue
+            except TimeoutError as e:
+                logger.error(f"Timeout searching for coin {symbol}: {e}")
+                print(f"Naomi: CoinGecko is taking too long to respond. Try again in a moment! ⏰")
+                continue
+            except (ValueError, KeyError) as e:
+                logger.error(f"Invalid data from CoinGecko for {symbol}: {e}")
+                print(f"Naomi: Got weird data from CoinGecko for {symbol.upper()}. Try again! 🤔")
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error searching for coin {symbol}: {e}")
+                print(f"Naomi: Yikes! Something went wrong searching for {symbol.upper()}. Try again in a moment! 😅")
+                print(f"Error type: {type(e).__name__}")
                 continue
             
             # Step 2: Get detailed coin information
             print(f"📊 Getting data for {symbol.upper()}...")
-            coin_details = get_coin_details(coin_id)
-            
-            if coin_details.get("status") != "success":
-                print(f"Naomi: Yikes! Something went wrong getting data for {symbol.upper()}. Try again in a moment! 😅")
+            try:
+                coin_details = get_coin_details(coin_id)
+                
+                if coin_details.get("status") != "success":
+                    print(f"Naomi: Yikes! Something went wrong getting data for {symbol.upper()}. Try again in a moment! 😅")
+                    continue
+            except ConnectionError as e:
+                logger.error(f"Network error getting coin details for {symbol}: {e}")
+                print(f"Naomi: Network issues! Can't connect to CoinGecko for {symbol.upper()} data. Check your internet connection! 🌐")
+                continue
+            except TimeoutError as e:
+                logger.error(f"Timeout getting coin details for {symbol}: {e}")
+                print(f"Naomi: CoinGecko is taking too long to get {symbol.upper()} data. Try again in a moment! ⏰")
+                continue
+            except (ValueError, KeyError) as e:
+                logger.error(f"Invalid data structure for {symbol}: {e}")
+                print(f"Naomi: Got weird data structure for {symbol.upper()}. Try again! 🤔")
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error getting coin details for {symbol}: {e}")
+                print(f"Naomi: Oops! Something went wrong getting data for {symbol.upper()}. Try again in a moment! 😅")
+                print(f"Error type: {type(e).__name__}")
                 continue
             
             # Step 3: Build the data summary
@@ -378,12 +595,41 @@ def main():
             print(f"🔗 Getting smart money analytics...")
             if is_native:
                 # For native assets, use the chain name
-                smart_money_data = get_native_asset_smart_money_flow(chain)
+                if chain and chain.lower() != "unknown":
+                    smart_money_data = get_native_asset_smart_money_flow(chain)
+                    
+                    # Check if native asset smart money flow is not supported
+                    if smart_money_data and smart_money_data.get("status") == "error":
+                        error_msg = smart_money_data.get("result", "")
+                        if "not supported for native asset" in error_msg:
+                            print(f"⚠️ Smart money flow not available for {symbol.upper()} on {chain}, using alternative data")
+                            # Try to get general market data instead
+                            smart_money_data = {
+                                "status": "success",
+                                "result": f"Smart money flow data not available for {symbol.upper()} on {chain}. Consider checking price action and volume patterns instead.",
+                                "fallback": True
+                            }
+                        else:
+                            # Other error, use fallback method
+                            print(f"⚠️ Smart money flow error for {symbol.upper()}, using fallback method")
+                            smart_money_data = get_smart_money_flow(symbol)
+                    
+                    # Handle alternative analytics for native assets
+                    if smart_money_data and smart_money_data.get("fallback") and smart_money_data.get("analytics_type") == "alternative_native_asset":
+                        print(f"📊 Using alternative analytics for {symbol.upper()} on {chain}")
+                        # Add alternative suggestions to additional data
+                        if smart_money_data.get("alternative_suggestions"):
+                            suggestions = smart_money_data["alternative_suggestions"]
+                            smart_money_data["result"] += f"\n\nAlternative analysis suggestions:\n" + "\n".join([f"• {suggestion}" for suggestion in suggestions])
+                else:
+                    print(f"⚠️ Chain information unavailable for {symbol.upper()}, using fallback method")
+                    smart_money_data = get_smart_money_flow(symbol)
             else:
                 # For tokens, use the contract address
-                if chain and contract_address:
+                if chain and chain.lower() != "unknown" and contract_address:
                     smart_money_data = get_token_smart_money_flow(chain, contract_address)
                 else:
+                    print(f"⚠️ Chain or contract address unavailable for {symbol.upper()}, using fallback method")
                     smart_money_data = get_smart_money_flow(symbol)
             
             if smart_money_data and smart_money_data.get("status") == "success":
@@ -398,7 +644,15 @@ def main():
                     # Legacy smart money data
                     additional_data.append(f"Smart Money Flow: {smart_money_data.get('result', 'N/A')}")
             else:
-                additional_data.append("Smart Money Flow: Data unavailable")
+                # Check if it's an API key error
+                if smart_money_data and smart_money_data.get("status") == "error":
+                    error_msg = smart_money_data.get("result", "")
+                    if "API key is missing" in error_msg:
+                        additional_data.append("Smart Money Flow: Nansen API key required - add NANSEN_API_KEY to .env")
+                    else:
+                        additional_data.append(f"Smart Money Flow: {error_msg}")
+                else:
+                    additional_data.append("Smart Money Flow: Data unavailable")
             
             # Always get social sentiment for comprehensive analysis
             print(f"📱 Getting social sentiment...")
@@ -406,7 +660,15 @@ def main():
             if social_data and social_data.get("status") == "success":
                 additional_data.append(f"Social Sentiment: {social_data['summary']}")
             else:
-                additional_data.append("Social Sentiment: Data unavailable")
+                # Check if it's an API key error
+                if social_data and social_data.get("status") == "error":
+                    error_msg = social_data.get("result", "")
+                    if "API key missing" in error_msg:
+                        additional_data.append("Social Sentiment: Twitter API key required - add TWITTER_BEARER_TOKEN to .env")
+                    else:
+                        additional_data.append(f"Social Sentiment: {error_msg}")
+                else:
+                    additional_data.append("Social Sentiment: Data unavailable")
             
             # Get additional data based on specific intent
             if intent == "PERFORMANCE" and timeframe:
@@ -480,9 +742,38 @@ def main():
                             print(f"- [{t['sentiment'].capitalize()} | Engagement: {t['engagement']}] {t['url']}")
                     conversation.append({"role": "user", "content": user_input})
                     conversation.append({"role": "assistant", "content": f"Naomi: {data_summary}"})
+            except TimeoutError as e:
+                print("Naomi: Grok is taking too long to respond (timeout). Let me give you the data directly!")
+                print(f"Naomi: {data_summary} Pretty wild times in crypto, right? 🚀")
+                print(f"\n{charts}")
+                if social_data and social_data.get('status') == 'success' and social_data.get('cited_tweets'):
+                    print("\nMost Impactful Tweets:")
+                    for t in social_data['cited_tweets']:
+                        print(f"- [{t['sentiment'].capitalize()} | Engagement: {t['engagement']}] {t['url']}")
+                conversation.append({"role": "user", "content": user_input})
+                conversation.append({"role": "assistant", "content": f"Naomi: {data_summary}"})
+            except ConnectionError as e:
+                print("Naomi: Can't connect to Grok right now (network issue). Here's what I found:")
+                print(f"Naomi: {data_summary} Pretty wild times in crypto, right? 🚀")
+                print(f"\n{charts}")
+                if social_data and social_data.get('status') == 'success' and social_data.get('cited_tweets'):
+                    print("\nMost Impactful Tweets:")
+                    for t in social_data['cited_tweets']:
+                        print(f"- [{t['sentiment'].capitalize()} | Engagement: {t['engagement']}] {t['url']}")
+                conversation.append({"role": "user", "content": user_input})
+                conversation.append({"role": "assistant", "content": f"Naomi: {data_summary}"})
+            except (ValueError, KeyError) as e:
+                print(f"Naomi: Got some weird data from Grok: {str(e)}. Here's what I found:")
+                print(f"Naomi: {data_summary} Pretty wild times in crypto, right? 🚀")
+                print(f"\n{charts}")
+                if social_data and social_data.get('status') == 'success' and social_data.get('cited_tweets'):
+                    print("\nMost Impactful Tweets:")
+                    for t in social_data['cited_tweets']:
+                        print(f"- [{t['sentiment'].capitalize()} | Engagement: {t['engagement']}] {t['url']}")
+                conversation.append({"role": "user", "content": user_input})
+                conversation.append({"role": "assistant", "content": f"Naomi: {data_summary}"})
             except Exception as e:
-                print("Naomi: Sorry, my brain just lagged out (Grok-4 timeout or error). Try again in a moment!")
-                # Fallback response
+                print(f"Naomi: Unexpected error with Grok: {str(e)}. Here's what I found:")
                 print(f"Naomi: {data_summary} Pretty wild times in crypto, right? 🚀")
                 print(f"\n{charts}")
                 if social_data and social_data.get('status') == 'success' and social_data.get('cited_tweets'):
@@ -499,9 +790,65 @@ def main():
         except KeyboardInterrupt:
             print("\n\nNaomi: Oops, looks like you're in a hurry! Catch you later!")
             break
+        except EOFError:
+            print("\n\nNaomi: Input stream ended. See you later!")
+            break
+        except (ValueError, TypeError) as e:
+            logger.error(f"Data type error in main loop: {e}")
+            print(f"\nNaomi: Oops, got some weird data: {str(e)}")
+            print("Let's try that again with a different approach!")
+        except ConnectionError as e:
+            logger.error(f"Network error in main loop: {e}")
+            print(f"\nNaomi: 🌐 Network connection issue detected!")
+            print("This could be due to:")
+            print("• Internet connection problems")
+            print("• API service temporarily unavailable")
+            print("• Firewall or proxy blocking connections")
+            print("\nPlease check your internet connection and try again!")
+            print("If the problem persists, the crypto APIs might be temporarily down.")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Requests connection error in main loop: {e}")
+            print(f"\nNaomi: 🔌 API connection failed!")
+            print("Unable to connect to external services. This might be:")
+            print("• Temporary network issue")
+            print("• API service maintenance")
+            print("• DNS resolution problem")
+            print("\nPlease try again in a few moments!")
+        except TimeoutError as e:
+            logger.error(f"Timeout error in main loop: {e}")
+            print(f"\nNaomi: ⏰ Request timed out!")
+            print("The API servers are taking longer than expected to respond.")
+            print("This could be due to:")
+            print("• High server load")
+            print("• Network congestion")
+            print("• API rate limiting")
+            print("\nPlease try again in a few moments!")
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Requests timeout error in main loop: {e}")
+            print(f"\nNaomi: ⏱️ API request timeout!")
+            print("The external services are not responding quickly enough.")
+            print("This is usually temporary. Please try again!")
+        except (KeyError, AttributeError) as e:
+            logger.error(f"Data structure error in main loop: {e}")
+            print(f"\nNaomi: Data structure issue: {str(e)}")
+            print("Let's try that again!")
+        except (OSError, IOError) as e:
+            logger.error(f"System error in main loop: {e}")
+            print(f"\nNaomi: System error: {str(e)}")
+            print("Please check your system and try again!")
+        except ImportError as e:
+            logger.error(f"Import error in main loop: {e}")
+            print(f"\nNaomi: Missing dependency: {str(e)}")
+            print("Please check your installation and try again!")
         except Exception as e:
-            print(f"\nNaomi: Yikes, something went sideways: {str(e)}")
-            print("Let's try that again, shall we?")
+            logger.error(f"Unexpected error in main loop: {e}")
+            print(f"\nNaomi: Unexpected error occurred: {str(e)}")
+            print("This is unusual! Please try again or contact support if it persists.")
+            print(f"Error type: {type(e).__name__}")
+            # Log the full error for debugging (in production, this would go to a log file)
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            print(f"Debug info: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main() 
