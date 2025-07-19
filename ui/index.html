@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naomi Crypto Assistant - API Tester</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.error {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #e9ecef;
+        }
+
+        .section h2 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .response-area {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+            border: 1px solid #e9ecef;
+        }
+
+        .response-area h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .response-content {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .quick-btn {
+            background: white;
+            border: 2px solid #e9ecef;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .quick-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .tab.active {
+            border-bottom-color: #667eea;
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .container {
+                margin: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-robot"></i> Naomi Crypto Assistant</h1>
+            <p>API Testing Interface - Powered by xAI Grok & Multiple Data Sources</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Checking API status...</span>
+            </div>
+            <div>
+                <strong>API Base:</strong> http://13.60.80.172
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Left Column -->
+            <div>
+                <div class="section">
+                    <h2><i class="fas fa-search"></i> Quick Actions</h2>
+                    <div class="quick-actions">
+                        <div class="quick-btn" onclick="testHealth()">
+                            <i class="fas fa-heartbeat"></i><br>
+                            Health Check
+                        </div>
+                        <div class="quick-btn" onclick="testNetwork()">
+                            <i class="fas fa-network-wired"></i><br>
+                            Network Test
+                        </div>
+                        <div class="quick-btn" onclick="searchBitcoin()">
+                            <i class="fab fa-bitcoin"></i><br>
+                            Search Bitcoin
+                        </div>
+                        <div class="quick-btn" onclick="chatWithNaomi()">
+                            <i class="fas fa-comments"></i><br>
+                            Chat with Naomi
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2><i class="fas fa-coins"></i> Coin Analysis</h2>
+                    <div class="form-group">
+                        <label for="coinSymbol">Coin Symbol/Name:</label>
+                        <input type="text" id="coinSymbol" placeholder="e.g., bitcoin, ethereum, solana" value="bitcoin">
+                    </div>
+                    <div class="form-group">
+                        <label for="analysisIntent">Analysis Type:</label>
+                        <select id="analysisIntent">
+                            <option value="GENERAL">General Analysis</option>
+                            <option value="PRICE">Price Analysis</option>
+                            <option value="PERFORMANCE">Performance Analysis</option>
+                            <option value="ONCHAIN">Smart Money Analysis</option>
+                            <option value="SOCIAL">Social Sentiment</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="timeframe">Timeframe:</label>
+                        <select id="timeframe">
+                            <option value="">All Time</option>
+                            <option value="1h">1 Hour</option>
+                            <option value="24h">24 Hours</option>
+                            <option value="7d">7 Days</option>
+                            <option value="30d">30 Days</option>
+                        </select>
+                    </div>
+                    <button class="btn" onclick="analyzeCoin()">
+                        <i class="fas fa-chart-line"></i> Analyze Coin
+                    </button>
+                </div>
+
+                <div class="section">
+                    <h2><i class="fas fa-comments"></i> Chat with Naomi</h2>
+                    <div class="form-group">
+                        <label for="chatMessage">Message:</label>
+                        <textarea id="chatMessage" rows="3" placeholder="Ask Naomi anything about crypto...">Hi Naomi! How's the crypto market today?</textarea>
+                    </div>
+                    <button class="btn" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i> Send Message
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div>
+                <div class="section">
+                    <h2><i class="fas fa-tools"></i> API Endpoints</h2>
+                    <div class="tabs">
+                        <div class="tab active" onclick="showTab('coin')">Coin Data</div>
+                        <div class="tab" onclick="showTab('smart')">Smart Money</div>
+                        <div class="tab" onclick="showTab('social')">Social</div>
+                    </div>
+
+                    <!-- Coin Data Tab -->
+                    <div class="tab-content active" id="coinTab">
+                        <div class="form-group">
+                            <label for="searchQuery">Search Coin:</label>
+                            <input type="text" id="searchQuery" placeholder="e.g., bitcoin" value="bitcoin">
+                        </div>
+                        <button class="btn btn-secondary" onclick="searchCoin()">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="coinId">Coin ID:</label>
+                            <input type="text" id="coinId" placeholder="e.g., bitcoin" value="bitcoin">
+                        </div>
+                        <button class="btn btn-secondary" onclick="getCoinDetails()">
+                            <i class="fas fa-info-circle"></i> Get Details
+                        </button>
+                        <button class="btn btn-secondary" onclick="getPerformance()">
+                            <i class="fas fa-chart-bar"></i> Performance
+                        </button>
+                    </div>
+
+                    <!-- Smart Money Tab -->
+                    <div class="tab-content" id="smartTab">
+                        <div class="form-group">
+                            <label for="chain">Chain:</label>
+                            <select id="chain">
+                                <option value="ethereum">Ethereum</option>
+                                <option value="solana">Solana</option>
+                                <option value="polygon">Polygon</option>
+                                <option value="avalanche">Avalanche</option>
+                                <option value="arbitrum">Arbitrum</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="tokenAddress">Token Address (optional):</label>
+                            <input type="text" id="tokenAddress" placeholder="0x... (leave empty for native asset)">
+                        </div>
+                        <button class="btn btn-warning" onclick="getSmartMoneyFlow()">
+                            <i class="fas fa-money-bill-wave"></i> Get Smart Money Flow
+                        </button>
+                    </div>
+
+                    <!-- Social Tab -->
+                    <div class="tab-content" id="socialTab">
+                        <div class="form-group">
+                            <label for="socialSymbol">Symbol:</label>
+                            <input type="text" id="socialSymbol" placeholder="e.g., bitcoin" value="bitcoin">
+                        </div>
+                        <button class="btn btn-success" onclick="getSocialSentiment()">
+                            <i class="fas fa-heart"></i> Get Sentiment
+                        </button>
+                        <button class="btn btn-success" onclick="getTrendingHashtags()">
+                            <i class="fas fa-fire"></i> Trending Hashtags
+                        </button>
+                        <button class="btn btn-success" onclick="getInfluencerMentions()">
+                            <i class="fas fa-crown"></i> Influencer Mentions
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2><i class="fas fa-cog"></i> System Info</h2>
+                    <div class="form-group">
+                        <label>API Status:</label>
+                        <div id="apiStatus">Checking...</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Last Request:</label>
+                        <div id="lastRequest">None</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Response Time:</label>
+                        <div id="responseTime">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="response-area">
+            <h3><i class="fas fa-terminal"></i> API Response</h3>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>Processing request...</div>
+            </div>
+            <div class="response-content" id="responseContent">
+                Welcome to Naomi Crypto Assistant API Tester! 🚀
+
+Click any button above to test the API endpoints.
+
+Your API is running at: http://13.60.80.172
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://13.60.80.172';
+        let lastRequestTime = 0;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            testHealth();
+        });
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // API helper function
+        async function makeRequest(endpoint, method = 'GET', data = null) {
+            const startTime = Date.now();
+            const url = `${API_BASE}${endpoint}`;
+            
+            showLoading(true);
+            updateLastRequest(`${method} ${endpoint}`);
+
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(url, options);
+                const result = await response.json();
+                
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+                
+                updateResponseTime(responseTime);
+                showResponse(result);
+                
+                return result;
+            } catch (error) {
+                showError(`Request failed: ${error.message}`);
+                updateResponseTime(-1);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // UI helper functions
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showResponse(data) {
+            const content = document.getElementById('responseContent');
+            content.textContent = JSON.stringify(data, null, 2);
+        }
+
+        function showError(message) {
+            const content = document.getElementById('responseContent');
+            content.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function showSuccess(message) {
+            const content = document.getElementById('responseContent');
+            content.innerHTML = `<div class="success">${message}</div>`;
+        }
+
+        function updateLastRequest(request) {
+            document.getElementById('lastRequest').textContent = request;
+        }
+
+        function updateResponseTime(time) {
+            const element = document.getElementById('responseTime');
+            if (time === -1) {
+                element.textContent = 'Failed';
+            } else {
+                element.textContent = `${time}ms`;
+            }
+        }
+
+        function updateStatus(healthy) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            
+            if (healthy) {
+                dot.className = 'status-dot';
+                text.textContent = 'API is healthy';
+            } else {
+                dot.className = 'status-dot error';
+                text.textContent = 'API is down';
+            }
+        }
+
+        // Quick action functions
+        async function testHealth() {
+            const result = await makeRequest('/health');
+            if (result.status === 'healthy') {
+                updateStatus(true);
+            } else {
+                updateStatus(false);
+            }
+        }
+
+        async function testNetwork() {
+            await makeRequest('/network/test');
+        }
+
+        async function searchBitcoin() {
+            document.getElementById('coinSymbol').value = 'bitcoin';
+            await analyzeCoin();
+        }
+
+        async function chatWithNaomi() {
+            document.getElementById('chatMessage').value = 'Hi Naomi! How are you today?';
+            await sendMessage();
+        }
+
+        // Main API functions
+        async function analyzeCoin() {
+            const symbol = document.getElementById('coinSymbol').value;
+            const intent = document.getElementById('analysisIntent').value;
+            const timeframe = document.getElementById('timeframe').value;
+            
+            const data = {
+                symbol: symbol,
+                intent: intent,
+                timeframe: timeframe || null
+            };
+            
+            await makeRequest('/analysis', 'POST', data);
+        }
+
+        async function sendMessage() {
+            const message = document.getElementById('chatMessage').value;
+            const data = {
+                message: message,
+                context: []
+            };
+            
+            await makeRequest('/conversation', 'POST', data);
+        }
+
+        async function searchCoin() {
+            const query = document.getElementById('searchQuery').value;
+            const data = { query: query };
+            await makeRequest('/coin/search', 'POST', data);
+        }
+
+        async function getCoinDetails() {
+            const coinId = document.getElementById('coinId').value;
+            await makeRequest(`/coin/${coinId}/details`);
+        }
+
+        async function getPerformance() {
+            const coinId = document.getElementById('coinId').value;
+            const timeframe = document.getElementById('timeframe').value || '7d';
+            await makeRequest(`/coin/${coinId}/performance?timeframe=${timeframe}`);
+        }
+
+        async function getSmartMoneyFlow() {
+            const chain = document.getElementById('chain').value;
+            const tokenAddress = document.getElementById('tokenAddress').value;
+            
+            const data = {
+                chain: chain,
+                token_address: tokenAddress || null
+            };
+            
+            await makeRequest('/smart-money/flow', 'POST', data);
+        }
+
+        async function getSocialSentiment() {
+            const symbol = document.getElementById('socialSymbol').value;
+            const data = {
+                symbol: symbol,
+                coin_name: symbol.charAt(0).toUpperCase() + symbol.slice(1)
+            };
+            
+            await makeRequest('/social/sentiment', 'POST', data);
+        }
+
+        async function getTrendingHashtags() {
+            await makeRequest('/social/trending');
+        }
+
+        async function getInfluencerMentions() {
+            const symbol = document.getElementById('socialSymbol').value;
+            await makeRequest(`/social/influencers?symbol=${symbol}`);
+        }
+    </script>
+</body>
+</html> 
