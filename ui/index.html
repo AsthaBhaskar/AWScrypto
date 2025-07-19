@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Naomi Crypto Assistant - API Tester</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -457,7 +458,14 @@
                 </div>
 
                 <div class="section">
-                    <h2><i class="fas fa-cog"></i> System Info</h2>
+                    <h2><i class="fas fa-cog"></i> Configuration</h2>
+                    <div class="form-group">
+                        <label for="apiUrl">API Base URL:</label>
+                        <input type="text" id="apiUrl" value="https://13.60.80.172" placeholder="https://your-api-url.com">
+                        <button class="btn btn-secondary" onclick="updateApiUrl()" style="margin-top: 10px;">
+                            <i class="fas fa-save"></i> Update URL
+                        </button>
+                    </div>
                     <div class="form-group">
                         <label>API Status:</label>
                         <div id="apiStatus">Checking...</div>
@@ -491,11 +499,35 @@ Your API is running at: http://13.60.80.172
     </div>
 
     <script>
-        const API_BASE = 'http://13.60.80.172';
+        let API_BASE = 'https://13.60.80.172';
         let lastRequestTime = 0;
+
+        // Load API URL from localStorage or use default
+        function loadApiUrl() {
+            const savedUrl = localStorage.getItem('naomi_api_url');
+            if (savedUrl) {
+                API_BASE = savedUrl;
+                document.getElementById('apiUrl').value = savedUrl;
+            }
+        }
+
+        // Update API URL
+        function updateApiUrl() {
+            const newUrl = document.getElementById('apiUrl').value.trim();
+            if (newUrl) {
+                API_BASE = newUrl;
+                localStorage.setItem('naomi_api_url', newUrl);
+                showSuccess('API URL updated successfully!');
+                // Test the new URL
+                setTimeout(() => testHealth(), 1000);
+            } else {
+                showError('Please enter a valid API URL');
+            }
+        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            loadApiUrl();
             testHealth();
         });
 
@@ -535,6 +567,11 @@ Your API is running at: http://13.60.80.172
                 }
 
                 const response = await fetch(url, options);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const result = await response.json();
                 
                 const endTime = Date.now();
@@ -545,8 +582,56 @@ Your API is running at: http://13.60.80.172
                 
                 return result;
             } catch (error) {
-                showError(`Request failed: ${error.message}`);
+                console.error('API Request Error:', error);
+                
+                // Try HTTP fallback if HTTPS fails
+                if (API_BASE.startsWith('https://') && error.message.includes('Failed to fetch')) {
+                    const httpUrl = API_BASE.replace('https://', 'http://');
+                    console.log('Trying HTTP fallback:', httpUrl);
+                    
+                    try {
+                        const fallbackResponse = await fetch(`${httpUrl}${endpoint}`, {
+                            method: method,
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: data ? JSON.stringify(data) : undefined
+                        });
+                        
+                        if (fallbackResponse.ok) {
+                            const fallbackResult = await fallbackResponse.json();
+                            const endTime = Date.now();
+                            const responseTime = endTime - startTime;
+                            
+                            updateResponseTime(responseTime);
+                            showResponse(fallbackResult);
+                            showSuccess('Connected via HTTP fallback (HTTPS not available)');
+                            
+                            return fallbackResult;
+                        }
+                    } catch (fallbackError) {
+                        console.error('HTTP fallback also failed:', fallbackError);
+                    }
+                }
+                
+                // Handle specific error types
+                let errorMessage = 'Request failed';
+                
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error: Cannot connect to API server. Please check if the server is running and accessible.';
+                } else if (error.message.includes('Mixed Content')) {
+                    errorMessage = 'HTTPS/HTTP mismatch: The UI is on HTTPS but API is on HTTP. Please use HTTPS for the API or host UI on HTTP.';
+                } else if (error.message.includes('CORS')) {
+                    errorMessage = 'CORS error: API server needs to allow cross-origin requests.';
+                } else {
+                    errorMessage = `Request failed: ${error.message}`;
+                }
+                
+                showError(errorMessage);
                 updateResponseTime(-1);
+                updateStatus(false);
+                
+                return null;
             } finally {
                 showLoading(false);
             }
@@ -601,7 +686,7 @@ Your API is running at: http://13.60.80.172
         // Quick action functions
         async function testHealth() {
             const result = await makeRequest('/health');
-            if (result.status === 'healthy') {
+            if (result && result.status === 'healthy') {
                 updateStatus(true);
             } else {
                 updateStatus(false);
