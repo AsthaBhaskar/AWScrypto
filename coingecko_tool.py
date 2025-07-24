@@ -1,3 +1,7 @@
+"""
+CoinGecko Tool Module
+Provides functions for searching coin IDs, fetching coin details, and historical performance from the CoinGecko API, with retry logic and prioritization for Solana/Ethereum assets.
+"""
 import os
 import requests
 import time
@@ -10,17 +14,18 @@ load_dotenv()
 
 def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
     """
-    Retry utility for API calls with exponential backoff.
-    
+    Purpose:
+        Retry utility for API calls with exponential backoff and jitter.
     Args:
-        func: Function to retry
-        max_retries: Maximum number of retry attempts
-        base_delay: Initial delay in seconds
-        max_delay: Maximum delay in seconds
-        backoff_factor: Multiplier for exponential backoff
-    
+        func (callable): Function to retry.
+        max_retries (int): Maximum number of retry attempts.
+        base_delay (int): Initial delay in seconds.
+        max_delay (int): Maximum delay in seconds.
+        backoff_factor (int): Multiplier for exponential backoff.
     Returns:
-        Result of the function call or None if all retries failed
+        Any: Result of the function call or None if all retries failed.
+    Exceptions:
+        Raises the last exception if all retries fail.
     """
     for attempt in range(max_retries + 1):
         try:
@@ -44,7 +49,14 @@ def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_fact
 @tool
 def search_coin_id(query: str) -> str:
     """
-    Searches CoinGecko for a coin ID, prioritizing Solana/Ethereum chain coins, then exact name, then symbol, then fallback.
+    Purpose:
+        Search CoinGecko for a coin ID, prioritizing exact symbol/name matches for top-level coins, then Solana/Ethereum chain coins, then exact name, then symbol, then fallback. Improved to handle ambiguous names like 'pump' by matching CoinGecko ID and common variants (e.g., 'pump-fun').
+    Args:
+        query (str): Coin name or symbol to search for.
+    Returns:
+        str: CoinGecko coin ID if found, otherwise None.
+    Exceptions:
+        Handles network, data parsing, system, and import errors. Returns None on error.
     """
     # Validate input parameter
     if not query or not query.strip():
@@ -52,7 +64,7 @@ def search_coin_id(query: str) -> str:
         return None
     
     # Validate query format (should be alphanumeric with spaces)
-    if not re.match(r'^[a-zA-Z0-9\s]+$', query.strip()):
+    if not re.match(r'^[a-zA-Z0-9\s\.\-]+$', query.strip()):
         print(f"[DEBUG] Invalid query format: {query}")
         return None
     
@@ -69,15 +81,19 @@ def search_coin_id(query: str) -> str:
         if not data:
             print(f"[DEBUG] Failed to get data from CoinGecko after retries for '{query}'")
             return None
-            
+        
         coins = data.get("coins", [])
         if not coins:
             return None
         query_lower = query.lower()
+        # 0. Prefer exact symbol or name match among all coins (case-insensitive)
+        for coin in coins:
+            if coin.get("symbol", "").lower() == query_lower or coin.get("name", "").lower() == query_lower:
+                print(f"[DEBUG] CoinGecko ID for '{query}' (exact symbol/name match): {coin.get('id')}")
+                return coin.get("id")
         # 1. Exact name match (prioritize solana/eth chains)
         sol_eth_coins = []
         for coin in coins:
-            # Check for Solana/Ethereum in platforms or asset_platform_id
             platforms = coin.get("platforms", {})
             asset_platform_id = coin.get("asset_platform_id", "")
             if (
@@ -86,6 +102,16 @@ def search_coin_id(query: str) -> str:
                 asset_platform_id in ["solana", "ethereum"]
             ):
                 sol_eth_coins.append(coin)
+        # Try exact CoinGecko ID match among sol/eth coins
+        for coin in sol_eth_coins:
+            if coin.get("id", "").lower() == query_lower:
+                print(f"[DEBUG] CoinGecko ID for '{query}' (sol/eth id match): {coin.get('id')}")
+                return coin.get("id")
+        # Try common variant (e.g., 'pump' -> 'pump-fun')
+        for coin in sol_eth_coins:
+            if query_lower in coin.get("id", "").lower() or query_lower.replace(".", "-") in coin.get("id", "").lower():
+                print(f"[DEBUG] CoinGecko ID for '{query}' (sol/eth id variant match): {coin.get('id')}")
+                return coin.get("id")
         # Try exact name match among sol/eth coins
         for coin in sol_eth_coins:
             if coin.get("name", "").lower() == query_lower:
@@ -100,17 +126,27 @@ def search_coin_id(query: str) -> str:
         if sol_eth_coins:
             print(f"[DEBUG] CoinGecko ID for '{query}' (sol/eth fallback): {sol_eth_coins[0].get('id')}")
             return sol_eth_coins[0].get("id")
-        # 2. Exact name match (all coins)
+        # 2. Exact CoinGecko ID match (all coins)
+        for coin in coins:
+            if coin.get("id", "").lower() == query_lower:
+                print(f"[DEBUG] CoinGecko ID for '{query}': {coin.get('id')}")
+                return coin.get("id")
+        # 3. Common variant (all coins)
+        for coin in coins:
+            if query_lower in coin.get("id", "").lower() or query_lower.replace(".", "-") in coin.get("id", "").lower():
+                print(f"[DEBUG] CoinGecko ID for '{query}' (id variant match): {coin.get('id')}")
+                return coin.get("id")
+        # 4. Exact name match (all coins)
         for coin in coins:
             if coin.get("name", "").lower() == query_lower:
                 print(f"[DEBUG] CoinGecko ID for '{query}': {coin.get('id')}")
                 return coin.get("id")
-        # 3. Exact symbol match (all coins)
+        # 5. Exact symbol match (all coins)
         for coin in coins:
             if coin.get("symbol", "").lower() == query_lower:
                 print(f"[DEBUG] CoinGecko ID for '{query}': {coin.get('id')}")
                 return coin.get("id")
-        # 4. Fallback to first result
+        # 6. Fallback to first result
         print(f"[DEBUG] CoinGecko ID for '{query}': {coins[0].get('id')}")
         return coins[0].get("id")
     except requests.exceptions.RequestException as e:
@@ -133,7 +169,14 @@ def search_coin_id(query: str) -> str:
 @tool
 def get_coin_details(coin_id: str) -> dict:
     """
-    Fetches detailed cryptocurrency data from CoinGecko including historical performance data.
+    Purpose:
+        Fetch detailed cryptocurrency data from CoinGecko, including price, market cap, and performance.
+    Args:
+        coin_id (str): The CoinGecko coin ID.
+    Returns:
+        dict: Status, coin details, and summary or error message.
+    Exceptions:
+        Handles HTTP, timeout, connection, and request exceptions. Returns error dict on failure.
     """
     # Validate input parameter
     if not coin_id or not coin_id.strip():
@@ -161,7 +204,7 @@ def get_coin_details(coin_id: str) -> dict:
         market_data = data.get("market_data", {})
         current_price = market_data.get("current_price", {}).get("usd", None)
         if isinstance(current_price, (int, float)):
-            current_price_fmt = f"{current_price:.2f}"
+            current_price_fmt = f"{current_price:.6f}"
         else:
             current_price_fmt = "N/A"
         market_cap = market_data.get("market_cap", {}).get("usd", None)
@@ -252,7 +295,15 @@ def get_coin_details(coin_id: str) -> dict:
 @tool
 def get_historical_performance(coin_id: str, timeframe: str = "all") -> dict:
     """
-    Fetches historical performance data for a specific timeframe or all timeframes.
+    Purpose:
+        Fetch historical performance data for a coin for a specific timeframe or all timeframes.
+    Args:
+        coin_id (str): The CoinGecko coin ID.
+        timeframe (str): Timeframe for performance data ('1h', '24h', '7d', '30d', or 'all').
+    Returns:
+        dict: Status, performance data, and summary or error message.
+    Exceptions:
+        Returns error dict if coin_id is missing, invalid, or if timeframe is invalid.
     """
     if not coin_id:
         return {"status": "error", "result": "Missing coin_id parameter."}

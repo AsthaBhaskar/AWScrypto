@@ -1,3 +1,7 @@
+"""
+Nansen Tool Module
+Provides functions for fetching and analyzing smart money flow, on-chain analytics, and whale movements using the Nansen API, with integration to CoinGecko for token details.
+"""
 import os
 import requests
 import json
@@ -9,17 +13,18 @@ from coingecko_tool import search_coin_id, get_coin_details
 
 def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
     """
-    Retry utility for API calls with exponential backoff.
-    
+    Purpose:
+        Retry utility for API calls with exponential backoff and jitter.
     Args:
-        func: Function to retry
-        max_retries: Maximum number of retry attempts
-        base_delay: Initial delay in seconds
-        max_delay: Maximum delay in seconds
-        backoff_factor: Multiplier for exponential backoff
-    
+        func (callable): Function to retry.
+        max_retries (int): Maximum number of retry attempts.
+        base_delay (int): Initial delay in seconds.
+        max_delay (int): Maximum delay in seconds.
+        backoff_factor (int): Multiplier for exponential backoff.
     Returns:
-        Result of the function call or None if all retries failed
+        Any: Result of the function call or None if all retries failed.
+    Exceptions:
+        Raises the last exception if all retries fail.
     """
     for attempt in range(max_retries + 1):
         try:
@@ -45,13 +50,14 @@ load_dotenv()
 
 def get_token_address_from_coingecko(symbol: str) -> tuple:
     """
+    Purpose:
     Get the token contract address and chain from CoinGecko for a given symbol.
-    
     Args:
-        symbol: The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol')
-        
+        symbol (str): The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol').
     Returns:
-        Tuple of (chain, token_address) or (None, None) if not found
+        tuple: (chain, token_address) or (None, None) if not found or on error.
+    Exceptions:
+        Handles network, data parsing, and generic exceptions. Returns (None, None) on error.
     """
     try:
         # Get coin details from CoinGecko
@@ -95,7 +101,18 @@ def get_token_address_from_coingecko(symbol: str) -> tuple:
 # Nansen Tools
 # ------------------------------------------------------------------------------
 def _fetch_nansen_flow_intelligence(chain: str, token_address: str, timeframe: str = "1d") -> dict:
-    """Helper to fetch and process smart money flow from Nansen using flow-intelligence for a given timeframe."""
+    """
+    Purpose:
+        Helper to fetch and process smart money flow from Nansen using flow-intelligence for a given timeframe.
+    Args:
+        chain (str): Blockchain name (e.g., 'ethereum', 'solana').
+        token_address (str): Token contract address.
+        timeframe (str): Timeframe for analysis (default: '1d').
+    Returns:
+        dict: Smart money flow data or error message.
+    Exceptions:
+        Handles HTTP, timeout, connection, request, data parsing, system, import, and generic exceptions. Returns error dict on failure.
+    """
     # Validate required parameters
     if not chain or not chain.strip():
         return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
@@ -109,8 +126,14 @@ def _fetch_nansen_flow_intelligence(chain: str, token_address: str, timeframe: s
         return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
     
     # Validate token address format (basic check)
-    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
-        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
+    if chain.lower() == "solana":
+    # Solana addresses are base58, typically 32-44 chars, allow any non-empty string
+        if not (isinstance(token_address, str) and 32 <= len(token_address) <= 44):
+            return {"status": "error", "result": f"Invalid Solana token address format: {token_address}"}
+    else:
+    # EVM chains: must start with 0x and be 42 chars
+        if not (isinstance(token_address, str) and token_address.startswith("0x") and len(token_address) == 42):
+            return {"status": "error", "result": f"Invalid token address format: {token_address}"}
     
     api_key = os.getenv("NANSEN_API_KEY")
     if not api_key:
@@ -198,7 +221,17 @@ def _fetch_nansen_flow_intelligence(chain: str, token_address: str, timeframe: s
         return {"status": "error", "result": f"Nansen API request failed: {str(e)}"}
 
 def _fetch_nansen_trading_patterns(chain: str, token_address: str) -> dict:
-    """Fetch trading patterns for a token from Nansen (example endpoint, adjust as needed)."""
+    """
+    Purpose:
+        Fetch trading patterns for a token from Nansen (example endpoint, adjust as needed).
+    Args:
+        chain (str): Blockchain name.
+        token_address (str): Token contract address.
+    Returns:
+        dict: Trading patterns data or error message.
+    Exceptions:
+        Handles HTTP, request, data parsing, system, import, and generic exceptions. Returns error dict on failure.
+    """
     # Validate required parameters
     if not chain or not chain.strip():
         return {"status": "error", "result": "Chain parameter is required and cannot be empty."}
@@ -211,9 +244,13 @@ def _fetch_nansen_trading_patterns(chain: str, token_address: str) -> dict:
     if chain.lower() not in valid_chains:
         return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
     
-    # Validate token address format (basic check)
-    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
-        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
+    # Validate token address format (Solana: base58, 32-44 chars; EVM: 0x, 42 chars)
+    if chain.lower() == "solana":
+        if not (isinstance(token_address, str) and 32 <= len(token_address) <= 44):
+            return {"status": "error", "result": f"Invalid Solana token address format: {token_address}"}
+    else:
+        if not (isinstance(token_address, str) and token_address.startswith("0x") and len(token_address) == 42):
+            return {"status": "error", "result": f"Invalid token address format: {token_address}"}
     
     api_key = os.getenv("NANSEN_API_KEY")
     if not api_key:
@@ -260,6 +297,18 @@ def _fetch_nansen_trading_patterns(chain: str, token_address: str) -> dict:
         return {"status": "error", "result": f"Unexpected error: {str(e)}"}
 
 def get_smart_money_advice(netflow_usd, profitable_trader_flow, profitable_investor_flow):
+    """
+    Purpose:
+        Generate actionable advice based on smart money, profitable trader, and investor flows.
+    Args:
+        netflow_usd (float): Net smart money flow in USD.
+        profitable_trader_flow (float): Net flow from profitable traders.
+        profitable_investor_flow (float): Net flow from profitable investors.
+    Returns:
+        str: Actionable advice string.
+    Exceptions:
+        None
+    """
     advice = []
     # Smart money
     if netflow_usd is not None:
@@ -289,15 +338,15 @@ def get_smart_money_advice(netflow_usd, profitable_trader_flow, profitable_inves
 
 def get_comprehensive_smart_money_flow(chain: str, token_address: str) -> dict:
     """
-    Fetches comprehensive smart money flow data from Nansen for multiple timeframes.
-    Returns detailed analytics including flows, trader counts, and actionable insights.
-    
+    Purpose:
+        Fetch comprehensive smart money flow data from Nansen for multiple timeframes and provide analytics.
     Args:
-        chain: The blockchain name (e.g., 'ethereum', 'solana')
-        token_address: The token contract address
-        
+        chain (str): Blockchain name (e.g., 'ethereum', 'solana').
+        token_address (str): Token contract address.
     Returns:
-        Dictionary with comprehensive smart money analytics
+        dict: Comprehensive smart money analytics, summary, and analysis.
+    Exceptions:
+        Handles HTTP, request, data parsing, system, import, and generic exceptions. Returns error dict on failure.
     """
     # Validate required parameters
     if not chain or not chain.strip():
@@ -442,7 +491,14 @@ def get_comprehensive_smart_money_flow(chain: str, token_address: str) -> dict:
 
 def generate_smart_money_analysis(data: dict) -> dict:
     """
-    Generates actionable insights from smart money flow data.
+    Purpose:
+        Generate actionable insights and recommendations from smart money flow data.
+    Args:
+        data (dict): Smart money flow data for multiple timeframes.
+    Returns:
+        dict: Analysis including sentiment, trend, confidence, key insights, and recommendation.
+    Exceptions:
+        None
     """
     analysis = {
         "overall_sentiment": "neutral",
@@ -507,7 +563,14 @@ def generate_smart_money_analysis(data: dict) -> dict:
 
 def format_smart_money_summary(data: dict) -> str:
     """
-    Formats smart money data into a readable summary string.
+    Purpose:
+        Format smart money data into a readable summary string for reporting.
+    Args:
+        data (dict): Smart money flow data for multiple timeframes.
+    Returns:
+        str: Summary string for reporting.
+    Exceptions:
+        None
     """
     summary_parts = []
     
@@ -523,8 +586,15 @@ def format_smart_money_summary(data: dict) -> str:
 
 def get_token_smart_money_flow(chain: str, token_address: str) -> dict:
     """
-    Fetches smart money flow data from Nansen for a specific TOKEN for 24h, 7d, 30d, and trading patterns.
-    Adds actionable advice based on smart money and profitable trader/investor flows.
+    Purpose:
+        Fetch smart money flow data from Nansen for a specific token for 24h, 7d, 30d, and trading patterns. Adds actionable advice.
+    Args:
+        chain (str): Blockchain name.
+        token_address (str): Token contract address.
+    Returns:
+        dict: Smart money flow data, trading patterns, and advice.
+    Exceptions:
+        Returns error dict if parameters are missing or invalid, or if API call fails.
     """
     # Validate required parameters
     if not chain or not chain.strip():
@@ -538,9 +608,13 @@ def get_token_smart_money_flow(chain: str, token_address: str) -> dict:
     if chain.lower() not in valid_chains:
         return {"status": "error", "result": f"Unsupported chain '{chain}'. Supported chains: {', '.join(valid_chains)}"}
     
-    # Validate token address format (basic check)
-    if not token_address.startswith("0x") and not token_address.startswith("1") and not token_address.startswith("2"):
-        return {"status": "error", "result": f"Invalid token address format: {token_address}"}
+    # Validate token address format (Solana: base58, 32-44 chars; EVM: 0x, 42 chars)
+    if chain.lower() == "solana":
+        if not (isinstance(token_address, str) and 32 <= len(token_address) <= 44):
+            return {"status": "error", "result": f"Invalid Solana token address format: {token_address}"}
+    else:
+        if not (isinstance(token_address, str) and token_address.startswith("0x") and len(token_address) == 42):
+            return {"status": "error", "result": f"Invalid token address format: {token_address}"}
 
     timeframes = {"24h": "1d", "7d": "7d", "30d": "30d"}
     flows = {}
@@ -571,13 +645,14 @@ def get_token_smart_money_flow(chain: str, token_address: str) -> dict:
 
 def get_native_asset_smart_money_flow(chain: str) -> dict:
     """
-    Fetches smart money flow data from Nansen for a NATIVE asset (e.g., SOL, ETH).
-
+    Purpose:
+        Fetch smart money flow data from Nansen for a native asset (e.g., SOL, ETH).
     Args:
-        chain: The blockchain name (e.g., 'solana', 'ethereum').
-
+        chain (str): Blockchain name (e.g., 'solana', 'ethereum').
     Returns:
-        A dictionary with a summary of smart money inflows/outflows for the chain.
+        dict: Summary of smart money inflows/outflows for the chain.
+    Exceptions:
+        Returns error dict if parameters are missing or invalid, or if API call fails.
     """
     # Validate required parameters
     if not chain or not chain.strip():
@@ -615,13 +690,14 @@ def get_native_asset_smart_money_flow(chain: str) -> dict:
 
 def get_alternative_native_asset_analytics(chain: str) -> dict:
     """
-    Provides alternative analytics for native assets when smart money flow is not available.
-    
+    Purpose:
+        Provide alternative analytics for native assets when smart money flow is not available.
     Args:
-        chain: The blockchain name
-        
+        chain (str): Blockchain name.
     Returns:
-        Dictionary with alternative analytics and suggestions
+        dict: Alternative analytics and suggestions.
+    Exceptions:
+        None
     """
     chain_analytics = {
         "ethereum": {
@@ -679,13 +755,14 @@ def get_alternative_native_asset_analytics(chain: str) -> dict:
 @tool
 def get_smart_money_flow(symbol: str) -> dict:
     """
+    Purpose:
     Get smart money flow data for a specific cryptocurrency using Nansen API.
-    
     Args:
-        symbol: The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol')
-        
+        symbol (str): The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol').
     Returns:
-        Dictionary containing smart money flow analysis
+        dict: Smart money flow analysis and summary.
+    Exceptions:
+        Returns error dict if chain or token cannot be determined or if API call fails.
     """
     print(f"[DEBUG] Getting smart money flow for {symbol.upper()}")
     
@@ -726,25 +803,27 @@ def get_smart_money_flow(symbol: str) -> dict:
 @tool
 def get_onchain_analytics(symbol: str) -> dict:
     """
+    Purpose:
     Fetch comprehensive on-chain analytics and smart money data from Nansen.
-    
     Args:
-        symbol: The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol')
-        
+        symbol (str): The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol').
     Returns:
-        Dictionary containing on-chain analytics and smart money insights
+        dict: On-chain analytics and smart money insights.
+    Exceptions:
+        Returns error dict if API call fails.
     """
     return get_smart_money_flow(symbol)
 
 @tool
 def get_whale_movements(symbol: str) -> dict:
     """
-    Track whale movements for a specific cryptocurrency.
-    
+    Purpose:
+        Track whale movements for a specific cryptocurrency using Nansen API.
     Args:
-        symbol: The cryptocurrency symbol
-        
+        symbol (str): The cryptocurrency symbol.
     Returns:
-        Whale movement data
+        dict: Whale movement data.
+    Exceptions:
+        Returns error dict if API call fails.
     """
     return get_smart_money_flow(symbol) 

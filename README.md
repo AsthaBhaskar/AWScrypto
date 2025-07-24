@@ -94,6 +94,54 @@ Price: $177.50 (+5.2% 24h)
 The institutional flow is looking spicy! 🌟
 ```
 
+## 🚀 Usage
+
+### Run the Assistant
+```bash
+python crypto_assistant.py
+```
+
+### Example Queries
+```
+> price of bitcoin
+> smart money flow for solana
+> social sentiment for dogecoin
+> tell me about ethereum
+```
+
+## 🛠️ Environment Variables
+
+Set these in your `.env` file:
+
+- `GROK_API_KEY` (required): xAI Grok API key for AI responses
+- `COINGECKO_API_KEY` (optional): CoinGecko Pro API key (falls back to free tier)
+- `NANSEN_API_KEY` (optional): Nansen API key for smart money analytics
+- `TWITTER_BEARER_TOKEN` (optional): Twitter API v2 Bearer token for social sentiment
+
+Example:
+```
+GROK_API_KEY=your_grok_api_key_here
+COINGECKO_API_KEY=your_coingecko_pro_api_key_here
+NANSEN_API_KEY=your_nansen_api_key_here
+TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
+```
+
+## 📚 API Endpoints
+
+If running the API server (see API_README.md for details):
+
+- `GET /health` — Health check
+- `GET /network/test` — Test network connectivity
+- `POST /coin/search` — Search for a coin ID
+- `GET /coin/{coin_id}/details` — Get detailed coin information
+- `GET /coin/{coin_id}/performance` — Get historical performance data
+- `POST /smart-money/flow` — Get smart money flow data
+- `POST /social/sentiment` — Get social sentiment analysis
+- `GET /social/trending` — Get trending crypto hashtags
+- `GET /social/influencers` — Get influencer mentions
+- `POST /conversation` — Chat with Naomi (conversational AI)
+- `POST /analysis` — Get comprehensive crypto analysis
+
 ## 🛠️ Technical Architecture
 
 ### Core Components

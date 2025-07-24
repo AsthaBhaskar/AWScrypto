@@ -17,64 +17,64 @@ A comprehensive FastAPI-based REST API that exposes all crypto assistant functio
 - Python 3.8+
 - Required API keys (see Environment Variables section)
 
-## 🛠️ Installation
+## 🚀 Usage
 
-1. **Clone or download the project files**
+### Start the API server
+```bash
+python api_main.py
+```
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r api_requirements.txt
-   ```
+Or with uvicorn:
+```bash
+uvicorn api_main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-3. **Set up environment variables**:
-   Create a `.env` file in the project root:
-   ```env
-   # Required
-   GROK_API_KEY=your_grok_api_key_here
-   
-   # Optional (for enhanced features)
-   COINGECKO_API_KEY=your_coingecko_pro_api_key_here
-   NANSEN_API_KEY=your_nansen_api_key_here
-   TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
-   ```
+### Example API Calls
 
-4. **Run the API server**:
-   ```bash
-   python api_main.py
-   ```
+- Search for a coin:
+  ```bash
+  curl -X POST "http://localhost:8000/coin/search" -H "Content-Type: application/json" -d '{"query": "bitcoin"}'
+  ```
+- Get comprehensive analysis:
+  ```bash
+  curl -X POST "http://localhost:8000/analysis" -H "Content-Type: application/json" -d '{"symbol": "bitcoin", "intent": "PRICE", "timeframe": "24h"}'
+  ```
 
-   Or using uvicorn directly:
-   ```bash
-   uvicorn api_main:app --host 0.0.0.0 --port 8000 --reload
-   ```
+## 🛠️ Environment Variables
 
-## 🌐 API Endpoints
+Set these in your `.env` file:
 
-### Health & Diagnostics
+| Variable                | Required | Description                                      |
+|------------------------|----------|--------------------------------------------------|
+| `GROK_API_KEY`         | ✅       | xAI Grok API key for AI responses                |
+| `COINGECKO_API_KEY`    | ❌       | CoinGecko Pro API key (falls back to free tier)  |
+| `NANSEN_API_KEY`       | ❌       | Nansen API key for smart money analytics         |
+| `TWITTER_BEARER_TOKEN` | ❌       | Twitter API v2 Bearer token for social sentiment |
+| `PORT`                 | ❌       | Server port (default: 8000)                      |
 
-- `GET /health` - Health check
-- `GET /network/test` - Test network connectivity to external APIs
+Example:
+```
+GROK_API_KEY=your_grok_api_key_here
+COINGECKO_API_KEY=your_coingecko_pro_api_key_here
+NANSEN_API_KEY=your_nansen_api_key_here
+TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
+```
 
-### Coin Data
+## 📚 API Endpoints
 
-- `POST /coin/search` - Search for a coin ID
-- `GET /coin/{coin_id}/details` - Get detailed coin information
-- `GET /coin/{coin_id}/performance` - Get historical performance data
-
-### Smart Money Analytics
-
-- `POST /smart-money/flow` - Get smart money flow data for tokens or native assets
-
-### Social Sentiment
-
-- `POST /social/sentiment` - Get social sentiment analysis
-- `GET /social/trending` - Get trending crypto hashtags
-- `GET /social/influencers` - Get influencer mentions for a coin
-
-### AI & Analysis
-
-- `POST /conversation` - Chat with Naomi (conversational AI)
-- `POST /analysis` - Get comprehensive crypto analysis
+| Method | Endpoint                        | Description                                 |
+|--------|----------------------------------|---------------------------------------------|
+| GET    | /health                         | Health check                                |
+| GET    | /network/test                   | Test network connectivity                   |
+| POST   | /coin/search                    | Search for a coin ID                        |
+| GET    | /coin/{coin_id}/details         | Get detailed coin information               |
+| GET    | /coin/{coin_id}/performance     | Get historical performance data             |
+| POST   | /smart-money/flow               | Get smart money flow data                   |
+| POST   | /social/sentiment               | Get social sentiment analysis               |
+| GET    | /social/trending                | Get trending crypto hashtags                |
+| GET    | /social/influencers             | Get influencer mentions                     |
+| POST   | /conversation                   | Chat with Naomi (conversational AI)         |
+| POST   | /analysis                       | Get comprehensive crypto analysis           |
 
 ## 📖 API Usage Examples
 

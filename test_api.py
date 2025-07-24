@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
 """
 Test script for Naomi Crypto Assistant API
-Demonstrates how to use all the API endpoints
+
+Test Purpose:
+    - Validate all major API endpoints for correct responses and error handling.
+    - Ensure integration between FastAPI server and external data sources (CoinGecko, Nansen, Twitter, Grok).
+    - Provide regression coverage for endpoint changes.
+
+Setup:
+    - Assumes API server is running at BASE_URL (default: http://localhost:8000)
+    - Requires valid .env with necessary API keys loaded by the server
+    - No explicit setup/teardown per test; each test is stateless and independent
+
+Teardown:
+    - No teardown required; tests do not modify server state or external data
 """
 
 import requests
@@ -13,7 +25,16 @@ from typing import Dict, Any
 BASE_URL = "http://localhost:8000"
 
 def test_health():
-    """Test health endpoint"""
+    """
+    Purpose:
+        Test the /health endpoint of the Naomi Crypto Assistant API.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("🔍 Testing health endpoint...")
     response = requests.get(f"{BASE_URL}/health")
     print(f"Status: {response.status_code}")
@@ -21,7 +42,16 @@ def test_health():
     print()
 
 def test_network_connectivity():
-    """Test network connectivity"""
+    """
+    Purpose:
+        Test the /network/test endpoint for network connectivity.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("🌐 Testing network connectivity...")
     response = requests.get(f"{BASE_URL}/network/test")
     print(f"Status: {response.status_code}")
@@ -29,7 +59,16 @@ def test_network_connectivity():
     print()
 
 def test_coin_search():
-    """Test coin search endpoint"""
+    """
+    Purpose:
+        Test the /coin/search endpoint for coin ID search.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("🔍 Testing coin search...")
     data = {"query": "bitcoin"}
     response = requests.post(f"{BASE_URL}/coin/search", json=data)
@@ -38,7 +77,16 @@ def test_coin_search():
     print()
 
 def test_coin_details():
-    """Test coin details endpoint"""
+    """
+    Purpose:
+        Test the /coin/{coin_id}/details endpoint for coin details.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("📊 Testing coin details...")
     response = requests.get(f"{BASE_URL}/coin/bitcoin/details")
     print(f"Status: {response.status_code}")
@@ -52,7 +100,16 @@ def test_coin_details():
     print()
 
 def test_historical_performance():
-    """Test historical performance endpoint"""
+    """
+    Purpose:
+        Test the /coin/{coin_id}/performance endpoint for historical performance.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("📈 Testing historical performance...")
     response = requests.get(f"{BASE_URL}/coin/bitcoin/performance?timeframe=7d")
     print(f"Status: {response.status_code}")
@@ -60,7 +117,16 @@ def test_historical_performance():
     print()
 
 def test_smart_money_flow():
-    """Test smart money flow endpoint"""
+    """
+    Purpose:
+        Test the /smart-money/flow endpoint for smart money flow data.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("💰 Testing smart money flow...")
     data = {
         "chain": "ethereum",
@@ -72,7 +138,16 @@ def test_smart_money_flow():
     print()
 
 def test_social_sentiment():
-    """Test social sentiment endpoint"""
+    """
+    Purpose:
+        Test the /social/sentiment endpoint for social sentiment analysis.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("📱 Testing social sentiment...")
     data = {
         "symbol": "bitcoin",
@@ -84,7 +159,16 @@ def test_social_sentiment():
     print()
 
 def test_trending_hashtags():
-    """Test trending hashtags endpoint"""
+    """
+    Purpose:
+        Test the /social/trending endpoint for trending hashtags.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("🔥 Testing trending hashtags...")
     response = requests.get(f"{BASE_URL}/social/trending")
     print(f"Status: {response.status_code}")
@@ -92,7 +176,16 @@ def test_trending_hashtags():
     print()
 
 def test_influencer_mentions():
-    """Test influencer mentions endpoint"""
+    """
+    Purpose:
+        Test the /social/influencers endpoint for influencer mentions.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("👑 Testing influencer mentions...")
     response = requests.get(f"{BASE_URL}/social/influencers?symbol=bitcoin")
     print(f"Status: {response.status_code}")
@@ -100,7 +193,16 @@ def test_influencer_mentions():
     print()
 
 def test_conversation():
-    """Test conversation endpoint"""
+    """
+    Purpose:
+        Test the /conversation endpoint for conversational AI.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("💬 Testing conversation...")
     data = {
         "message": "Hi Naomi!",
@@ -116,7 +218,16 @@ def test_conversation():
     print()
 
 def test_comprehensive_analysis():
-    """Test comprehensive analysis endpoint"""
+    """
+    Purpose:
+        Test the /analysis endpoint for comprehensive crypto analysis.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("🔬 Testing comprehensive analysis...")
     data = {
         "symbol": "bitcoin",
@@ -134,7 +245,16 @@ def test_comprehensive_analysis():
     print()
 
 def test_root_endpoint():
-    """Test root endpoint"""
+    """
+    Purpose:
+        Test the root (/) endpoint for API metadata.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if request fails.
+    """
     print("🏠 Testing root endpoint...")
     response = requests.get(f"{BASE_URL}/")
     print(f"Status: {response.status_code}")
@@ -142,7 +262,16 @@ def test_root_endpoint():
     print()
 
 def main():
-    """Run all API tests"""
+    """
+    Purpose:
+        Run all API endpoint tests for the Naomi Crypto Assistant API.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error if any test fails or if connection error occurs.
+    """
     print("🚀 Starting Naomi Crypto Assistant API Tests")
     print("=" * 50)
     

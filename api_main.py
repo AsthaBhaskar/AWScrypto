@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 """
 Naomi Crypto Assistant API - FastAPI version
-Exposes all crypto assistant functionalities through REST API endpoints
-
-Required Environment Variables (.env file):
-- GROK_API_KEY: Required - xAI Grok API key for AI responses
-- COINGECKO_API_KEY: Optional - CoinGecko Pro API key (falls back to free tier)
-- NANSEN_API_KEY: Optional - Nansen API key for smart money analytics
-- TWITTER_BEARER_TOKEN: Optional - Twitter API v2 Bearer token for social sentiment
+Exposes all crypto assistant functionalities through REST API endpoints.
+Handles coin search, analysis, smart money flow, social sentiment, and conversation endpoints, integrating with xAI Grok, CoinGecko, Nansen, and Twitter APIs.
 """
 
 import os
@@ -57,50 +52,156 @@ app.add_middleware(
 
 # Pydantic models for request/response
 class CoinSearchRequest(BaseModel):
-    query: str = Field(..., description="Coin name or symbol to search for")
+    """
+    Request model for searching a coin by name or symbol.
+
+    Attributes:
+        query (str): Coin name or symbol to search for. Example: 'bitcoin'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    query: str = Field(..., description="Coin name or symbol to search for")  # Example: 'bitcoin'
 
 class CoinAnalysisRequest(BaseModel):
-    symbol: str = Field(..., description="Coin symbol or name")
-    intent: Optional[str] = Field("GENERAL", description="Analysis intent: PRICE, PERFORMANCE, ONCHAIN, SOCIAL, GENERAL")
-    timeframe: Optional[str] = Field(None, description="Timeframe for analysis: 1h, 24h, 7d, 30d")
+    """
+    Request model for comprehensive coin analysis.
+
+    Attributes:
+        symbol (str): Coin symbol or name. Example: 'ETH'
+        intent (Optional[str]): Analysis intent (PRICE, PERFORMANCE, ONCHAIN, SOCIAL, GENERAL). Example: 'PRICE'
+        timeframe (Optional[str]): Timeframe for analysis (1h, 24h, 7d, 30d). Example: '24h'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    symbol: str = Field(..., description="Coin symbol or name")  # Example: 'ETH'
+    intent: Optional[str] = Field("GENERAL", description="Analysis intent: PRICE, PERFORMANCE, ONCHAIN, SOCIAL, GENERAL")  # Example: 'PRICE'
+    timeframe: Optional[str] = Field(None, description="Timeframe for analysis: 1h, 24h, 7d, 30d")  # Example: '24h'
 
 class ConversationRequest(BaseModel):
-    message: str = Field(..., description="User message for conversation")
-    context: Optional[List[Dict[str, str]]] = Field([], description="Previous conversation context")
+    """
+    Request model for conversational queries.
+
+    Attributes:
+        message (str): User message for conversation. Example: 'Hi Naomi!'
+        context (Optional[List[Dict[str, str]]]): Previous conversation context. Example: []
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    message: str = Field(..., description="User message for conversation")  # Example: 'Hi Naomi!'
+    context: Optional[List[Dict[str, str]]] = Field([], description="Previous conversation context")  # Example: []
 
 class SmartMoneyRequest(BaseModel):
-    chain: str = Field(..., description="Blockchain chain (ethereum, solana, etc.)")
-    token_address: Optional[str] = Field(None, description="Token contract address (optional for native assets)")
+    """
+    Request model for smart money flow queries.
+
+    Attributes:
+        chain (str): Blockchain chain (ethereum, solana, etc.). Example: 'ethereum'
+        token_address (Optional[str]): Token contract address (optional for native assets). Example: '0x123...'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    chain: str = Field(..., description="Blockchain chain (ethereum, solana, etc.)")  # Example: 'ethereum'
+    token_address: Optional[str] = Field(None, description="Token contract address (optional for native assets)")  # Example: '0x123...'
 
 class SocialSentimentRequest(BaseModel):
-    symbol: str = Field(..., description="Coin symbol")
-    coin_name: Optional[str] = Field(None, description="Full coin name")
+    """
+    Request model for social sentiment analysis queries.
+
+    Attributes:
+        symbol (str): Coin symbol. Example: 'BTC'
+        coin_name (Optional[str]): Full coin name. Example: 'Bitcoin'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    symbol: str = Field(..., description="Coin symbol")  # Example: 'BTC'
+    coin_name: Optional[str] = Field(None, description="Full coin name")  # Example: 'Bitcoin'
 
 class NetworkTestResponse(BaseModel):
-    status: str
-    results: Dict[str, Dict[str, Any]]
+    """
+    Response model for network connectivity test.
+
+    Attributes:
+        status (str): Status of the network test. Example: 'success'
+        results (Dict[str, Dict[str, Any]]): Results for each tested API endpoint. Example: {'https://api.coingecko.com/api/v3/ping': {'status': 'connected', 'status_code': 200, 'response_time': 0.12}}
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    status: str  # Example: 'success'
+    results: Dict[str, Dict[str, Any]]  # Example: {'https://api.coingecko.com/api/v3/ping': {'status': 'connected', 'status_code': 200, 'response_time': 0.12}}
 
 class CoinSearchResponse(BaseModel):
-    status: str
-    coin_id: Optional[str] = None
-    message: Optional[str] = None
+    """
+    Response model for coin search results.
+
+    Attributes:
+        status (str): Status of the search. Example: 'success'
+        coin_id (Optional[str]): CoinGecko coin ID if found. Example: 'bitcoin'
+        message (Optional[str]): Error or status message. Example: 'Coin not found'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    status: str  # Example: 'success'
+    coin_id: Optional[str] = None  # Example: 'bitcoin'
+    message: Optional[str] = None  # Example: 'Coin not found'
 
 class CoinDetailsResponse(BaseModel):
-    status: str
-    data: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    """
+    Response model for detailed coin information.
+
+    Attributes:
+        status (str): Status of the request. Example: 'success'
+        data (Optional[Dict[str, Any]]): Coin details data. Example: {'coin_id': 'bitcoin', 'current_price': 42000.0}
+        message (Optional[str]): Error or status message. Example: 'Invalid coin ID'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    status: str  # Example: 'success'
+    data: Optional[Dict[str, Any]] = None  # Example: {'coin_id': 'bitcoin', 'current_price': 42000.0}
+    message: Optional[str] = None  # Example: 'Invalid coin ID'
 
 class AnalysisResponse(BaseModel):
-    status: str
-    analysis: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
-    charts: Optional[str] = None
-    message: Optional[str] = None
+    """
+    Response model for comprehensive analysis results.
+
+    Attributes:
+        status (str): Status of the analysis. Example: 'success'
+        analysis (Optional[str]): AI-generated analysis text. Example: 'Naomi: Bitcoin is looking bullish...'
+        data (Optional[Dict[str, Any]]): Analysis data details. Example: {'coin_details': {...}, 'smart_money_data': {...}}
+        charts (Optional[str]): Chart summary. Example: '📈 Price Performance: ...'
+        message (Optional[str]): Error or status message. Example: 'Analysis failed'
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    status: str  # Example: 'success'
+    analysis: Optional[str] = None  # Example: 'Naomi: Bitcoin is looking bullish...'
+    data: Optional[Dict[str, Any]] = None  # Example: {'coin_details': {...}, 'smart_money_data': {...}}
+    charts: Optional[str] = None  # Example: '📈 Price Performance: ...'
+    message: Optional[str] = None  # Example: 'Analysis failed'
 
 class ConversationResponse(BaseModel):
-    status: str
-    response: str
-    context: List[Dict[str, str]]
+    """
+    Response model for conversational AI responses.
+
+    Attributes:
+        status (str): Status of the conversation. Example: 'success'
+        response (str): Naomi's response. Example: 'Hi. I\'m Naomi! ...'
+        context (List[Dict[str, str]]): Updated conversation context. Example: [{'role': 'user', 'content': 'Hi'}, {'role': 'assistant', 'content': 'Hello!'}]
+
+    Methods:
+        None (Pydantic BaseModel)
+    """
+    status: str  # Example: 'success'
+    response: str  # Example: 'Hi. I\'m Naomi! ...'
+    context: List[Dict[str, str]]  # Example: [{'role': 'user', 'content': 'Hi'}, {'role': 'assistant', 'content': 'Hello!'}]
 
 # Global variables
 grok_model = None
@@ -158,13 +259,14 @@ def is_prohibited_content(user_input):
     
     # If the query contains crypto-related terms, be more lenient
     has_crypto_context = any(indicator in text for indicator in crypto_indicators)
+    # WHY: This allows us to avoid false positives for words like 'hack' or 'scam' when used in a legitimate crypto context.
     
     # Direct keyword match (but be more careful with crypto context)
     for word in PROHIBITED_KEYWORDS:
         if word in text:
             # If it's a crypto context, check if it's part of a legitimate crypto term
             if has_crypto_context:
-                # Skip if it's likely a legitimate crypto term
+                # WHY: We skip blocking if the word is part of a legitimate crypto discussion (e.g., 'security audit' mentioning 'hack').
                 if word in ["hack", "scam", "fraud", "exploit"] and any(crypto_term in text for crypto_term in ["security", "audit", "vulnerability", "protection", "prevention", "detection", "analysis", "report", "news", "alert", "warning", "risk", "safety"]):
                     continue
             return True
@@ -174,7 +276,7 @@ def is_prohibited_content(user_input):
         if re.search(pattern, text):
             # If it's a crypto context, check if it's part of a legitimate crypto term
             if has_crypto_context:
-                # Skip if it's likely a legitimate crypto term
+                # WHY: Regex patterns can match more than intended, so we again check for legitimate context before blocking.
                 if "hack" in pattern and any(crypto_term in text for crypto_term in ["security", "audit", "vulnerability", "protection", "prevention", "detection", "analysis", "report", "news", "alert", "warning", "risk", "safety"]):
                     continue
             return True
@@ -185,7 +287,7 @@ def is_prohibited_content(user_input):
             if difflib.SequenceMatcher(None, word, w).ratio() > FUZZY_THRESHOLD:
                 # If it's a crypto context, check if it's part of a legitimate crypto term
                 if has_crypto_context:
-                    # Skip if it's likely a legitimate crypto term
+                    # WHY: Fuzzy matching can catch typos, but we don't want to block legitimate crypto discussions with typos.
                     if word in ["hack", "scam", "fraud", "exploit"] and any(crypto_term in text for crypto_term in ["security", "audit", "vulnerability", "protection", "prevention", "detection", "analysis", "report", "news", "alert", "warning", "risk", "safety"]):
                         continue
                 return True
@@ -332,13 +434,37 @@ async def startup_event():
 # Health check endpoint
 @app.get("/health", response_model=Dict[str, str])
 async def health_check():
-    """Health check endpoint."""
+    """
+    Purpose:
+        Health check endpoint to verify the API is running.
+    Args:
+        None
+    Returns:
+        dict: Status and message indicating API health.
+    Exceptions:
+        None
+    
+    Example Response:
+        {
+            "status": "healthy",
+            "message": "Naomi Crypto Assistant API is running"
+        }
+    """
     return {"status": "healthy", "message": "Naomi Crypto Assistant API is running"}
 
 # Network connectivity test endpoint
 @app.get("/network/test", response_model=NetworkTestResponse)
 async def test_network_connectivity():
-    """Test network connectivity to external APIs."""
+    """
+    Purpose:
+        Test network connectivity to external APIs (CoinGecko, xAI Grok, Twitter).
+    Args:
+        None
+    Returns:
+        dict: Status and results for each tested API endpoint.
+    Exceptions:
+        HTTPException: If network test fails or an exception occurs.
+    """
     try:
         results = check_network_connectivity()
         return {
@@ -352,7 +478,22 @@ async def test_network_connectivity():
 # Coin search endpoint
 @app.post("/coin/search", response_model=CoinSearchResponse)
 async def search_coin(request: CoinSearchRequest):
-    """Search for a coin ID on CoinGecko."""
+    """
+    Purpose:
+        Search for a coin ID on CoinGecko using a coin name or symbol.
+    Args:
+        request (CoinSearchRequest): Contains the query string for the coin.
+    Returns:
+        dict: Status and coin_id if found, or error message.
+    Exceptions:
+        HTTPException: If search fails or an exception occurs.
+    
+    Example Response:
+        {
+            "status": "success",
+            "coin_id": "bitcoin"
+        }
+    """
     try:
         # Content safety check
         if is_prohibited_content(request.query):
@@ -360,15 +501,12 @@ async def search_coin(request: CoinSearchRequest):
                 "status": "error",
                 "message": "Content violates safety policies"
             }
-        
         coin_id = search_coin_id(request.query)
-        
         if not coin_id:
             return {
                 "status": "error",
                 "message": f"Coin '{request.query}' not found"
             }
-        
         return {
             "status": "success",
             "coin_id": coin_id
@@ -380,7 +518,25 @@ async def search_coin(request: CoinSearchRequest):
 # Coin details endpoint
 @app.get("/coin/{coin_id}/details", response_model=CoinDetailsResponse)
 async def get_coin_details_endpoint(coin_id: str):
-    """Get detailed information about a coin."""
+    """
+    Purpose:
+        Get detailed information about a coin from CoinGecko.
+    Args:
+        coin_id (str): The CoinGecko coin ID.
+    Returns:
+        dict: Status and coin details, or error message.
+    Exceptions:
+        HTTPException: If retrieval fails or an exception occurs.
+    
+    Example Response:
+        {
+            "status": "success",
+            "data": {
+                "coin_id": "bitcoin",
+                "current_price": 42000.0
+            }
+        }
+    """
     try:
         # Validate coin_id format
         if not re.match(r'^[a-zA-Z0-9-]+$', coin_id):
@@ -388,15 +544,12 @@ async def get_coin_details_endpoint(coin_id: str):
                 "status": "error",
                 "message": "Invalid coin ID format"
             }
-        
         details = get_coin_details(coin_id)
-        
         if details.get("status") != "success":
             return {
                 "status": "error",
                 "message": details.get("result", "Failed to get coin details")
             }
-        
         return {
             "status": "success",
             "data": details
@@ -411,12 +564,21 @@ async def get_historical_performance_endpoint(
     coin_id: str,
     timeframe: str = Query("all", description="Timeframe: 1h, 24h, 7d, 30d, all")
 ):
-    """Get historical performance data for a coin."""
+    """
+    Purpose:
+        Get historical performance data for a coin from CoinGecko.
+    Args:
+        coin_id (str): The CoinGecko coin ID.
+        timeframe (str): Timeframe for performance data (default: 'all').
+    Returns:
+        dict: Historical performance data.
+    Exceptions:
+        HTTPException: If retrieval fails or an exception occurs.
+    """
     try:
         # Validate coin_id format
         if not re.match(r'^[a-zA-Z0-9-]+$', coin_id):
             raise HTTPException(status_code=400, detail="Invalid coin ID format")
-        
         performance = get_historical_performance(coin_id, timeframe)
         return performance
     except Exception as e:
@@ -426,7 +588,16 @@ async def get_historical_performance_endpoint(
 # Smart money flow endpoint
 @app.post("/smart-money/flow", response_model=Dict[str, Any])
 async def get_smart_money_flow_endpoint(request: SmartMoneyRequest):
-    """Get smart money flow data for a token or native asset."""
+    """
+    Purpose:
+        Get smart money flow data for a token or native asset using Nansen API.
+    Args:
+        request (SmartMoneyRequest): Contains chain and optional token_address.
+    Returns:
+        dict: Smart money flow data.
+    Exceptions:
+        HTTPException: If retrieval fails or an exception occurs.
+    """
     try:
         if request.token_address:
             # Token smart money flow
@@ -434,7 +605,6 @@ async def get_smart_money_flow_endpoint(request: SmartMoneyRequest):
         else:
             # Native asset smart money flow
             result = get_native_asset_smart_money_flow(request.chain)
-        
         return result
     except Exception as e:
         logger.error(f"Get smart money flow failed: {e}")
@@ -443,7 +613,16 @@ async def get_smart_money_flow_endpoint(request: SmartMoneyRequest):
 # Social sentiment endpoint
 @app.post("/social/sentiment", response_model=Dict[str, Any])
 async def get_social_sentiment_endpoint(request: SocialSentimentRequest):
-    """Get social sentiment analysis for a coin."""
+    """
+    Purpose:
+        Get social sentiment analysis for a coin using Twitter API.
+    Args:
+        request (SocialSentimentRequest): Contains symbol and optional coin_name.
+    Returns:
+        dict: Social sentiment analysis data.
+    Exceptions:
+        HTTPException: If retrieval fails or an exception occurs.
+    """
     try:
         result = get_social_sentiment(request.symbol, coin_name=request.coin_name)
         return result
@@ -454,7 +633,16 @@ async def get_social_sentiment_endpoint(request: SocialSentimentRequest):
 # Trending hashtags endpoint
 @app.get("/social/trending", response_model=Dict[str, Any])
 async def get_trending_hashtags_endpoint():
-    """Get trending crypto hashtags on Twitter."""
+    """
+    Purpose:
+        Get trending crypto hashtags on Twitter.
+    Args:
+        None
+    Returns:
+        dict: Trending hashtags data.
+    Exceptions:
+        HTTPException: If retrieval fails or an exception occurs.
+    """
     try:
         result = get_trending_hashtags()
         return result
@@ -467,7 +655,16 @@ async def get_trending_hashtags_endpoint():
 async def get_influencer_mentions_endpoint(
     symbol: str = Query(..., description="Coin symbol to search for")
 ):
-    """Get influencer mentions for a coin."""
+    """
+    Purpose:
+        Get influencer mentions for a coin using Twitter API.
+    Args:
+        symbol (str): Coin symbol to search for.
+    Returns:
+        dict: Influencer mentions data.
+    Exceptions:
+        HTTPException: If retrieval fails or an exception occurs.
+    """
     try:
         result = get_influencer_mentions(symbol)
         return result
@@ -478,35 +675,42 @@ async def get_influencer_mentions_endpoint(
 # Conversation endpoint
 @app.post("/conversation", response_model=ConversationResponse)
 async def handle_conversation_endpoint(request: ConversationRequest):
-    """Handle conversational queries with Naomi."""
+    """
+    Purpose:
+        Handle conversational queries with Naomi using Grok-4.
+    Args:
+        request (ConversationRequest): Contains user message and context.
+    Returns:
+        dict: Status, response, and updated context.
+    Exceptions:
+        HTTPException: If conversation fails or an exception occurs.
+    """
     try:
         # Content safety check
         if is_prohibited_content(request.message):
+            # WHY: Block prohibited content before processing to ensure compliance and safety.
             return {
                 "status": "error",
                 "response": "Content violates safety policies",
                 "context": request.context
             }
-        
         if is_ambiguous_content(request.message):
+            # WHY: Ask for clarification if the message is ambiguous, to avoid misinterpretation and improve user experience.
             return {
                 "status": "error",
                 "response": "Could you please clarify your question? I'm here to help with crypto-related topics!",
                 "context": request.context
             }
-        
         response = handle_conversation(request.message)
-        
         # Update context
         new_context = request.context + [
             {"role": "user", "content": request.message},
             {"role": "assistant", "content": response}
         ]
-        
         # Limit context length
         if len(new_context) > 10:
+            # WHY: Limit conversation context to the last 10 exchanges to avoid excessive memory usage and keep responses relevant.
             new_context = new_context[-10:]
-        
         return {
             "status": "success",
             "response": response,
@@ -519,31 +723,54 @@ async def handle_conversation_endpoint(request: ConversationRequest):
 # Comprehensive analysis endpoint
 @app.post("/analysis", response_model=AnalysisResponse)
 async def comprehensive_analysis(request: CoinAnalysisRequest):
-    """Get comprehensive crypto analysis including price, smart money, and social sentiment."""
+    """
+    Purpose:
+        Get comprehensive crypto analysis including price, smart money, and social sentiment using multiple APIs and Grok-4.
+    Args:
+        request (CoinAnalysisRequest): Contains symbol, intent, and timeframe.
+    Returns:
+        dict: Status, analysis, data, and charts.
+    Exceptions:
+        HTTPException: If analysis fails or an exception occurs.
+    
+    Example Response:
+        {
+            "status": "success",
+            "analysis": "Naomi: Bitcoin is looking bullish...",
+            "data": {
+                "coin_details": {"coin_id": "bitcoin", ...},
+                "smart_money_data": {...},
+                "social_data": {...},
+                "analysis_intent": "PRICE",
+                "timeframe": "24h"
+            },
+            "charts": "📈 Price Performance: ..."
+        }
+    """
     try:
         # Content safety check
         if is_prohibited_content(request.symbol):
+            # WHY: Block prohibited content before processing to ensure compliance and safety.
             return {
                 "status": "error",
                 "message": "Content violates safety policies"
             }
-        
         # Step 1: Search for the coin
         coin_id = search_coin_id(request.symbol)
         if not coin_id:
+            # WHY: If the coin is not found, return early to avoid unnecessary downstream errors.
             return {
                 "status": "error",
                 "message": f"Coin '{request.symbol}' not found"
             }
-        
         # Step 2: Get coin details
         coin_details = get_coin_details(coin_id)
         if coin_details.get("status") != "success":
+            # WHY: If coin details cannot be retrieved, analysis cannot proceed.
             return {
                 "status": "error",
                 "message": coin_details.get("result", "Failed to get coin details")
             }
-        
         # Step 3: Extract data
         coin_name = coin_details.get("coin_id", request.symbol.upper())
         current_price = coin_details.get("current_price", "N/A")
@@ -553,7 +780,6 @@ async def comprehensive_analysis(request: CoinAnalysisRequest):
         chain = coin_details.get("chain", "Unknown")
         is_native = coin_details.get("is_native_asset", False)
         contract_address = coin_details.get("contract_address")
-        
         # Step 4: Get smart money data
         smart_money_data = None
         if is_native and chain and chain.lower() != "unknown":
@@ -561,6 +787,7 @@ async def comprehensive_analysis(request: CoinAnalysisRequest):
             if smart_money_data and smart_money_data.get("status") == "error":
                 error_msg = smart_money_data.get("result", "")
                 if "not supported for native asset" in error_msg:
+                    # WHY: If smart money flow is not supported for native assets, provide a fallback message to the user.
                     smart_money_data = {
                         "status": "success",
                         "result": f"Smart money flow data not available for {request.symbol.upper()} on {chain}. Consider checking price action and volume patterns instead.",
@@ -570,15 +797,13 @@ async def comprehensive_analysis(request: CoinAnalysisRequest):
             smart_money_data = get_token_smart_money_flow(chain, contract_address)
         else:
             smart_money_data = get_smart_money_flow(request.symbol)
-        
         # Step 5: Get social sentiment
         social_data = get_social_sentiment(request.symbol, coin_name=coin_name)
-        
         # Step 6: Build data summary
         data_summary = f"{coin_name.upper()} - Price: ${current_price}, 24h: {price_change_24h}%, 7d: {price_change_7d}%, Market Cap: ${market_cap}, Chain: {chain}"
-        
         # Step 7: Generate analysis prompt
         intent = request.intent or "GENERAL"
+        # WHY: The prompt is tailored based on user intent to ensure the AI provides the most relevant analysis.
         if intent == "PRICE":
             prompt = f"User asked about {request.symbol.upper()} price. Here's the comprehensive data:\n{data_summary}\n\nAnalyze the price movements, smart money flows, and social sentiment. Correlate these factors and provide insights in Naomi's confident, witty Gen Z style."
         elif intent == "PERFORMANCE":
@@ -589,26 +814,22 @@ async def comprehensive_analysis(request: CoinAnalysisRequest):
             prompt = f"User asked about {request.symbol.upper()} social sentiment. Here's the comprehensive data:\n{data_summary}\n\nAnalyze social sentiment, smart money correlation, and market psychology. Provide social analysis in Naomi's style."
         else:
             prompt = f"User asked about {request.symbol.upper()}. Here's the comprehensive data:\n{data_summary}\n\nProvide a complete analysis including:\n1. Price analysis and market context\n2. Smart money flow interpretation\n3. Social sentiment correlation\n4. Overall market positioning and recommendations\n\nRespond in Naomi's confident, witty Gen Z style with actionable insights."
-        
         # Step 8: Generate AI analysis
         messages = [
             {"role": "system", "content": NAOMI_SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ]
-        
         response = grok_model.chat_completion(messages)
         if isinstance(response, dict) and "choices" in response and response["choices"]:
             content = response["choices"][0]["message"]["content"]
         else:
             content = f"Naomi: {data_summary} Pretty wild times in crypto, right? 🚀"
-        
         # Step 9: Generate charts
         price_data = {
             "price_change_24h": price_change_24h,
             "price_change_7d": price_change_7d
         }
         charts = generate_simple_charts(price_data, smart_money_data, social_data.get('summary') if social_data and social_data.get('status') == 'success' else None)
-        
         # Step 10: Prepare response data
         response_data = {
             "coin_details": coin_details,
@@ -617,14 +838,12 @@ async def comprehensive_analysis(request: CoinAnalysisRequest):
             "analysis_intent": intent,
             "timeframe": request.timeframe
         }
-        
         return {
             "status": "success",
             "analysis": content,
             "data": response_data,
             "charts": charts
         }
-        
     except Exception as e:
         logger.error(f"Comprehensive analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Comprehensive analysis failed: {str(e)}")
@@ -632,7 +851,16 @@ async def comprehensive_analysis(request: CoinAnalysisRequest):
 # Root endpoint
 @app.get("/")
 async def root():
-    """Root endpoint with API information."""
+    """
+    Purpose:
+        Root endpoint providing API information and available endpoints.
+    Args:
+        None
+    Returns:
+        dict: API metadata and endpoint list.
+    Exceptions:
+        None
+    """
     return {
         "message": "Naomi Crypto Assistant API",
         "version": "1.0.0",

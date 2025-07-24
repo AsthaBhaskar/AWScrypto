@@ -1,0 +1,224 @@
+[1mdiff --git a/ui/README.md b/ui/README.md[m
+[1mdeleted file mode 100644[m
+[1mindex 8299b23..0000000[m
+[1m--- a/ui/README.md[m
+[1m+++ /dev/null[m
+[36m@@ -1,164 +0,0 @@[m
+[31m-# Naomi Crypto Assistant - Web UI[m
+[31m-[m
+[31m-A modern, responsive web interface for testing the Naomi Crypto Assistant API.[m
+[31m-[m
+[31m-## 🚀 Features[m
+[31m-[m
+[31m-- **Real-time API Testing**: Test all 12 API endpoints directly from the browser[m
+[31m-- **Quick Actions**: One-click access to common operations[m
+[31m-- **Live Status Monitoring**: Real-time API health checks[m
+[31m-- **Responsive Design**: Works on desktop, tablet, and mobile[m
+[31m-- **Interactive Tabs**: Organized interface for different API categories[m
+[31m-- **JSON Response Viewer**: Formatted display of API responses[m
+[31m-- **Performance Metrics**: Response time tracking[m
+[31m-[m
+[31m-## 📁 Files[m
+[31m-[m
+[31m-- `index.html` - Main UI interface[m
+[31m-- `styles.css` - Additional styling and animations[m
+[31m-- `README.md` - This documentation[m
+[31m-[m
+[31m-## 🛠️ Setup[m
+[31m-[m
+[31m-1. **Download the UI files** to your local machine[m
+[31m-2. **Open `index.html`** in any modern web browser[m
+[31m-3. **Configure the API URL** (default: http://13.60.80.172)[m
+[31m-4. **Start testing!**[m
+[31m-[m
+[31m-## 🎯 Quick Start[m
+[31m-[m
+[31m-1. **Health Check**: Click "Health Check" to verify API status[m
+[31m-2. **Test Bitcoin**: Click "Search Bitcoin" for a quick coin analysis[m
+[31m-3. **Chat with Naomi**: Click "Chat with Naomi" to test conversational AI[m
+[31m-4. **Network Test**: Click "Network Test" to check external API connectivity[m
+[31m-[m
+[31m-## 📊 Available Endpoints[m
+[31m-[m
+[31m-### Health & Diagnostics[m
+[31m-- `GET /health` - API health check[m
+[31m-- `GET /network/test` - Network connectivity test[m
+[31m-[m
+[31m-### Coin Data[m
+[31m-- `POST /coin/search` - Search for coins[m
+[31m-- `GET /coin/{coin_id}/details` - Get coin details[m
+[31m-- `GET /coin/{coin_id}/performance` - Historical performance[m
+[31m-[m
+[31m-### Smart Money Analytics[m
+[31m-- `POST /smart-money/flow` - Smart money flow data[m
+[31m-[m
+[31m-### Social Sentiment[m
+[31m-- `POST /social/sentiment` - Social sentiment analysis[m
+[31m-- `GET /social/trending` - Trending hashtags[m
+[31m-- `GET /social/influencers` - Influencer mentions[m
+[31m-[m
+[31m-### AI & Analysis[m
+[31m-- `POST /conversation` - Chat with Naomi[m
+[31m-- `POST /analysis` - Comprehensive crypto analysis[m
+[31m-[m
+[31m-## 🎨 UI Sections[m
+[31m-[m
+[31m-### Quick Actions[m
+[31m-- **Health Check**: Verify API is running[m
+[31m-- **Network Test**: Check external API connectivity[m
+[31m-- **Search Bitcoin**: Quick Bitcoin analysis[m
+[31m-- **Chat with Naomi**: Test conversational AI[m
+[31m-[m
+[31m-### Coin Analysis[m
+[31m-- **Coin Symbol**: Enter any cryptocurrency symbol[m
+[31m-- **Analysis Type**: Choose analysis focus (Price, Performance, Smart Money, Social)[m
+[31m-- **Timeframe**: Select time period for analysis[m
+[31m-[m
+[31m-### API Endpoints (Tabbed Interface)[m
+[31m-- **Coin Data Tab**: Search, details, and performance[m
+[31m-- **Smart Money Tab**: On-chain analytics[m
+[31m-- **Social Tab**: Sentiment and trending data[m
+[31m-[m
+[31m-### System Info[m
+[31m-- **API Status**: Real-time health indicator[m
+[31m-- **Last Request**: Track recent API calls[m
+[31m-- **Response Time**: Performance monitoring[m
+[31m-[m
+[31m-## 🔧 Customization[m
+[31m-[m
+[31m-### Change API URL[m
+[31m-Edit the `API_BASE` constant in the JavaScript section:[m
+[31m-[m
+[31m-```javascript[m
+[31m-const API_BASE = 'http://your-api-url.com';[m
+[31m-```[m
+[31m-[m
+[31m-### Add New Endpoints[m
+[31m-1. Add new tab content in the HTML[m
+[31m-2. Create corresponding JavaScript function[m
+[31m-3. Use the `makeRequest()` helper function[m
+[31m-[m
+[31m-### Styling[m
+[31m-- Modify `styles.css` for custom styling[m
+[31m-- Update color scheme in CSS variables[m
+[31m-- Add new animations and effects[m
+[31m-[m
+[31m-## 📱 Mobile Support[m
+[31m-[m
+[31m-The UI is fully responsive and works on:[m
+[31m-- Desktop browsers (Chrome, Firefox, Safari, Edge)[m
+[31m-- Tablets (iPad, Android tablets)[m
+[31m-- Mobile phones (iPhone, Android)[m
+[31m-[m
+[31m-## 🎯 Usage Tips[m
+[31m-[m
+[31m-1. **Start with Health Check**: Always verify API is running first[m
+[31m-2. **Use Quick Actions**: For common operations, use the quick action buttons[m
+[31m-3. **Check Response Times**: Monitor performance in the System Info section[m
+[31m-4. **Read Error Messages**: Detailed error information is displayed in the response area[m
+[31m-5. **Try Different Analysis Types**: Test various analysis intents for comprehensive testing[m
+[31m-[m
+[31m-## 🔍 Troubleshooting[m
+[31m-[m
+[31m-### API Not Responding[m
+[31m-- Check if the API server is running[m
+[31m-- Verify the API URL is correct[m
+[31m-- Check network connectivity[m
+[31m-[m
+[31m-### CORS Issues[m
+[31m-- Ensure the API server allows CORS requests[m
+[31m-- Check browser console for error messages[m
+[31m-[m
+[31m-### Response Errors[m
+[31m-- Review the error message in the response area[m
+[31m-- Check API documentation for correct request format[m
+[31m-- Verify required parameters are provided[m
+[31m-[m
+[31m-## 🚀 Deployment[m
+[31m-[m
+[31m-### Local Testing[m
+[31m-Simply open `index.html` in a web browser.[m
+[31m-[m
+[31m-### Web Server Deployment[m
+[31m-Upload the UI files to any web server:[m
+[31m-- Apache[m
+[31m-- Nginx[m
+[31m-- GitHub Pages[m
+[31m-- Netlify[m
+[31m-- Vercel[m
+[31m-[m
+[31m-### Docker Deployment[m
+[31m-```dockerfile[m
+[31m-FROM nginx:alpine[m
+[31m-COPY . /usr/share/nginx/html[m
+[31m-EXPOSE 80[m
+[31m-CMD ["nginx", "-g", "daemon off;"][m
+[31m-```[m
+[31m-[m
+[31m-## 📞 Support[m
+[31m-[m
+[31m-For issues with the UI:[m
+[31m-1. Check browser console for JavaScript errors[m
+[31m-2. Verify API endpoint responses[m
+[31m-3. Test with different browsers[m
+[31m-4. Check network connectivity[m
+[31m-[m
+[31m-For API-related issues, refer to the main API documentation.[m
+[31m-[m
+[31m----[m
+[31m-[m
+[31m-**Happy testing! 🚀💰** [m
+\ No newline at end of file[m
+[1mdiff --git a/ui/TROUBLESHOOTING.md b/ui/TROUBLESHOOTING.md[m
+[1mdeleted file mode 100644[m
+[1mindex 4e4fa6e..0000000[m
+[1m--- a/ui/TROUBLESHOOTING.md[m
+[1m+++ /dev/null[m
+[36m@@ -1,136 +0,0 @@[m
+[31m-# Troubleshooting Guide[m
+[31m-[m
+[31m-## Common Issues and Solutions[m
+[31m-[m
+[31m-### 1. Mixed Content Error (HTTPS/HTTP Mismatch)[m
+[31m-[m
+[31m-**Problem:** UI is on HTTPS but API is on HTTP, causing browser to block requests.[m
+[31m-[m
+[31m-**Solutions:**[m
+[31m-- **Option A:** Use HTTP for both UI and API[m
+[31m-  - Change API URL to: `http://13.60.80.172`[m
+[31m-  - Host UI on HTTP instead of HTTPS[m
+[31m-[m
+[31m-- **Option B:** Use HTTPS for both UI and API[m
+[31m-  - Configure your API server to use HTTPS[m
+[31m-  - Update API URL to: `https://13.60.80.172`[m
+[31m-[m
+[31m-- **Option C:** Use the built-in fallback[m
+[31m-  - The UI now automatically tries HTTP if HTTPS fails[m
+[31m-  - Just use the default HTTPS URL[m
+[31m-[m
+[31m-### 2. CORS Error[m
+[31m-[m
+[31m-**Problem:** API server doesn't allow cross-origin requests.[m
+[31m-[m
+[31m-**Solution:** Add CORS headers to your API server:[m
+[31m-```python[m
+[31m-# In your FastAPI app[m
+[31m-from fastapi.middleware.cors import CORSMiddleware[m
+[31m-[m
+[31m-app.add_middleware([m
+[31m-    CORSMiddleware,[m
+[31m-    allow_origins=["*"],[m
+[31m-    allow_credentials=True,[m
+[31m-    allow_methods=["*"],[m
+[31m-    allow_headers=["*"],[m
+[31m-)[m
+[31m-```[m
+[31m-[m
+[31m-### 3. Network Connection Error[m
+[31m-[m
+[31m-**Problem:** Cannot connect to API server.[m
+[31m-[m
+[31m-**Solutions:**[m
+[31m-- Check if API server is running[m
+[31m-- Verify the API URL is correct[m
+[31m-- Check firewall settin

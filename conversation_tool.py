@@ -1,3 +1,7 @@
+"""
+Conversation Tool Module
+Handles conversational interactions for the Naomi crypto assistant, using Grok-4 for context-aware responses and maintaining a crypto-focused personality.
+"""
 import random
 import os
 import time
@@ -7,17 +11,18 @@ from dotenv import load_dotenv
 
 def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
     """
-    Retry utility for API calls with exponential backoff.
-    
+    Purpose:
+        Retry utility for API calls with exponential backoff and jitter.
     Args:
-        func: Function to retry
-        max_retries: Maximum number of retry attempts
-        base_delay: Initial delay in seconds
-        max_delay: Maximum delay in seconds
-        backoff_factor: Multiplier for exponential backoff
-    
+        func (callable): Function to retry.
+        max_retries (int): Maximum number of retry attempts.
+        base_delay (int): Initial delay in seconds.
+        max_delay (int): Maximum delay in seconds.
+        backoff_factor (int): Multiplier for exponential backoff.
     Returns:
-        Result of the function call or None if all retries failed
+        Any: Result of the function call or None if all retries failed.
+    Exceptions:
+        Raises the last exception if all retries fail.
     """
     for attempt in range(max_retries + 1):
         try:
@@ -60,14 +65,14 @@ For questions about who you are, what you can do, etc., be informative but alway
 @tool
 def handle_conversation(user_input: str) -> str:
     """
-    Handle conversational inputs using Grok-4 for intelligent, context-aware responses.
-    Always maintains Naomi's crypto-focused personality.
-    
+    Purpose:
+        Handle conversational inputs using Grok-4 for intelligent, context-aware responses, maintaining Naomi's crypto-focused personality.
     Args:
-        user_input: The user's conversational input
-        
+        user_input (str): The user's conversational input.
     Returns:
-        A response in Naomi's voice using Grok-4 for intelligent conversation
+        str: A response in Naomi's voice using Grok-4 for intelligent conversation.
+    Exceptions:
+        Handles TimeoutError, ConnectionError, ValueError, KeyError, OSError, IOError, ImportError, and generic Exception. Returns fallback response on error.
     """
     user_input_lower = user_input.lower().strip()
     
@@ -81,7 +86,7 @@ def handle_conversation(user_input: str) -> str:
         # Initialize Grok model
         grok_model = GrokModel(
             client_args={"api_key": grok_api_key},
-            model_id="grok-3",
+            model_id="grok-4-0709",
             params={"max_tokens": 300, "temperature": 0.8}
         )
         
@@ -128,7 +133,14 @@ def handle_conversation(user_input: str) -> str:
 
 def fallback_conversation_response(user_input_lower: str) -> str:
     """
-    Fallback hardcoded responses when Grok is not available.
+    Purpose:
+        Provide fallback hardcoded responses when Grok is not available or an error occurs.
+    Args:
+        user_input_lower (str): Lowercased user input for pattern matching.
+    Returns:
+        str: A hardcoded conversational response in Naomi's style.
+    Exceptions:
+        None
     """
     import re
     

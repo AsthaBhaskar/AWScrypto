@@ -1,3 +1,7 @@
+"""
+Twitter Tool Module
+Integrates with Twitter API v2 to fetch and analyze social sentiment, trending hashtags, and influencer mentions for cryptocurrencies, using TextBlob for sentiment analysis.
+"""
 import os
 import requests
 import time
@@ -8,17 +12,18 @@ from textblob import TextBlob
 
 def retry_api_call(func, max_retries=3, base_delay=1, max_delay=10, backoff_factor=2):
     """
-    Retry utility for API calls with exponential backoff.
-    
+    Purpose:
+        Retry utility for API calls with exponential backoff and jitter.
     Args:
-        func: Function to retry
-        max_retries: Maximum number of retry attempts
-        base_delay: Initial delay in seconds
-        max_delay: Maximum delay in seconds
-        backoff_factor: Multiplier for exponential backoff
-    
+        func (callable): Function to retry.
+        max_retries (int): Maximum number of retry attempts.
+        base_delay (int): Initial delay in seconds.
+        max_delay (int): Maximum delay in seconds.
+        backoff_factor (int): Multiplier for exponential backoff.
     Returns:
-        Result of the function call or None if all retries failed
+        Any: Result of the function call or None if all retries failed.
+    Exceptions:
+        Raises the last exception if all retries fail.
     """
     for attempt in range(max_retries + 1):
         try:
@@ -57,6 +62,16 @@ TWITTER_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 # Helper: Clean tweet text for sentiment analysis
 import re
 def clean_tweet(text):
+    """
+    Purpose:
+        Clean tweet text for sentiment analysis by removing URLs, mentions, hashtags, and special characters.
+    Args:
+        text (str): The tweet text to clean.
+    Returns:
+        str: Cleaned tweet text.
+    Exceptions:
+        None
+    """
     text = re.sub(r"http\S+", "", text)  # Remove URLs
     text = re.sub(r"@[A-Za-z0-9_]+", "", text)  # Remove mentions
     text = re.sub(r"#[A-Za-z0-9_]+", "", text)  # Remove hashtags
@@ -66,41 +81,37 @@ def clean_tweet(text):
 @tool
 def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 50) -> dict:
     """
-    Fetch and analyze social sentiment from Twitter for a given cryptocurrency.
-    Returns detailed sentiment percentages and cites impactful tweets.
+    Purpose:
+        Fetch and analyze social sentiment from Twitter for a given cryptocurrency.
     Args:
-        symbol: The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol')
-        coin_name: The full name of the coin (optional, for better search)
-        max_tweets: Number of tweets to analyze (default 50)
+        symbol (str): The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol').
+        coin_name (str, optional): The full name of the coin (for better search).
+        max_tweets (int, optional): Number of tweets to analyze (default 50).
     Returns:
-        Dict with sentiment breakdown and cited tweets
+        dict: Sentiment breakdown, cited tweets, and raw tweet data.
+    Exceptions:
+        Returns error dict if API key is missing, request fails, or data is invalid.
     """
     twitter_bearer_token = os.getenv("TWITTER_BEARER_TOKEN")
     if not twitter_bearer_token:
         return {"status": "error", "result": f"Twitter API key missing. Please add TWITTER_BEARER_TOKEN to your .env file."}
 
     # Build crypto-specific search query
-    # Prioritize $ symbol format and add crypto context to avoid false positives
     symbol_upper = symbol.upper()
-    
-    # Primary search: $SYMBOL format (most specific for crypto)
     primary_query = f'${symbol_upper}'
-    
-    # Secondary search: $SYMBOL with crypto context keywords
     crypto_keywords = ["crypto", "token", "coin", "blockchain", "defi", "nft", "trading", "price", "market", "bull", "bear", "pump", "dump", "moon", "hodl", "buy", "sell"]
-    context_queries = []
-    
-    for keyword in crypto_keywords[:5]:  # Use top 5 most relevant keywords
-        context_queries.append(f'${symbol_upper} {keyword}')
-    
-    # Combine queries with OR, prioritizing the $ symbol format
+    context_queries = [f'${symbol_upper} {keyword}' for keyword in crypto_keywords[:5]]
     query_parts = [primary_query] + context_queries
-    
-    # If coin_name is provided and different from symbol, add it with crypto context
+
+    # Fix: Only add coin_name context if coin_name is not empty and not equal to symbol
     if coin_name and coin_name.lower() != symbol.lower():
-        coin_context_queries = [f'"{coin_name}" {kw}' for kw in crypto_keywords[:3]]
-        query_parts.extend(coin_context_queries)
-    
+        # Avoid double quotes and empty segments
+        coin_name_clean = coin_name.replace('"', '').strip()
+        if coin_name_clean:
+            coin_context_queries = [f'{coin_name_clean} {kw}' for kw in crypto_keywords[:3]]
+            query_parts.extend(coin_context_queries)
+
+    # Combine queries with OR, prioritizing the $ symbol format
     query = " OR ".join([f'"{q}"' for q in query_parts]) + " lang:en -is:retweet"
 
     headers = {"Authorization": f"Bearer {twitter_bearer_token}"}
@@ -116,18 +127,15 @@ def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 5
     while fetched < max_tweets:
         if next_token:
             params["next_token"] = next_token
-            
         def make_twitter_request():
             response = requests.get(TWITTER_SEARCH_URL, headers=headers, params=params, timeout=15)
             response.raise_for_status()
             return response.json()
-        
         try:
             data = retry_api_call(make_twitter_request)
-            if not data:
-                print(f"[DEBUG] Failed to fetch tweets from Twitter after retries for {symbol}")
-                break
-                
+            if not data or "data" not in data:
+                # Robust error handling for empty or malformed responses
+                return {"status": "error", "result": "No social sentiment data available (Twitter API returned no data)."}
             batch = data.get("data", [])
             tweets.extend(batch)
             fetched += len(batch)
@@ -135,11 +143,12 @@ def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 5
             if not next_token or len(tweets) >= max_tweets:
                 break
             time.sleep(1)  # Rate limit safety
-            
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             print(f"[DEBUG] Twitter API HTTP error: {status_code}")
-            
+            if status_code == 400:
+                # FIXME: Twitter API query is malformed or not supported
+                return {"status": "error", "result": "Twitter API query was invalid (400 Bad Request). Please try a different coin or check query construction."}
             if status_code == 429:
                 print("[DEBUG] Twitter rate limit exceeded, stopping tweet fetch")
                 break
@@ -155,7 +164,6 @@ def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 5
             else:
                 print(f"[DEBUG] Twitter API error {status_code}, stopping tweet fetch")
                 break
-                
         except requests.exceptions.Timeout as e:
             print(f"[DEBUG] Twitter API timeout: {e}")
             break
@@ -171,15 +179,16 @@ def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 5
     filtered_tweets = []
     for tweet in tweets:
         text = tweet["text"].lower()
-        # Must contain $SYMBOL or be clearly about the crypto
         if (f"${symbol_upper.lower()}" in text or 
             f"${symbol.lower()}" in text or
             (coin_name and coin_name.lower() in text and any(kw in text for kw in crypto_keywords))):
             filtered_tweets.append(tweet)
-    
     tweets = filtered_tweets[:max_tweets]
 
-    # Sentiment analysis
+    if not tweets:
+        return {"status": "error", "result": "No relevant tweets found for sentiment analysis."}
+
+    # Sentiment analysis (unchanged)
     pos, neg, neu = 0, 0, 0
     cited_tweets = []
     tweet_sentiments = []
@@ -246,21 +255,31 @@ def get_social_sentiment(symbol: str, coin_name: str = None, max_tweets: int = 5
 @tool
 def get_trending_hashtags(symbol: str) -> str:
     """
-    Get trending hashtags related to a specific cryptocurrency.
+    Purpose:
+        Get trending hashtags related to a specific cryptocurrency.
     Args:
-        symbol: The cryptocurrency symbol
+        symbol (str): The cryptocurrency symbol.
     Returns:
-        Trending hashtags and their sentiment
+        str: Trending hashtags and their sentiment (not implemented).
+    Exceptions:
+        None
     """
+    # TODO: Implement actual Twitter API logic to fetch trending hashtags for the given symbol.
+    # This is currently a placeholder and always returns a static string.
     return "(Not implemented)"
 
 @tool
 def get_influencer_mentions(symbol: str) -> str:
     """
-    Get mentions of a cryptocurrency by influential accounts.
+    Purpose:
+        Get mentions of a cryptocurrency by influential accounts.
     Args:
-        symbol: The cryptocurrency symbol
+        symbol (str): The cryptocurrency symbol.
     Returns:
-        Influencer mention data
+        str: Influencer mention data (not implemented).
+    Exceptions:
+        None
     """
+    # TODO: Implement actual Twitter API logic to fetch influencer mentions for the given symbol.
+    # This is currently a placeholder and always returns a static string.
     return "(Not implemented)" 

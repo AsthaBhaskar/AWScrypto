@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """
 Test script for enhanced crypto assistant functionality
+
+Test Purpose:
+    - Validate the enhanced workflow for coin details, smart money flow, and social sentiment using CoinGecko, Nansen, and Twitter integrations.
+    - Ensure that the assistant can orchestrate multi-step data collection and synthesis.
+    - Provide regression coverage for workflow changes.
+
+Setup:
+    - Loads environment variables from .env
+    - Assumes all required API keys are present
+    - No explicit setup/teardown per test; test is stateless and does not modify data
+
+Teardown:
+    - No teardown required; test does not modify persistent state
 """
 
 import os
@@ -13,9 +26,18 @@ from twitter_tool import get_social_sentiment
 load_dotenv()
 
 def test_enhanced_workflow():
-    """Test the enhanced workflow with a sample coin"""
+    """
+    Purpose:
+        Test the enhanced workflow for coin details, smart money flow, and social sentiment using CoinGecko, Nansen, and Twitter integrations.
+    Args:
+        None
+    Returns:
+        None
+    Exceptions:
+        Prints error messages if any step fails or if data is unavailable.
+    """
     
-    print("🧪 Testing Enhanced Crypto Assistant Workflow")
+    print("🪪 Testing Enhanced Crypto Assistant Workflow")
     print("=" * 50)
     
     # Test coin

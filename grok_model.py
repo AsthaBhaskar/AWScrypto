@@ -1,3 +1,7 @@
+"""
+Grok Model Wrapper
+Provides a Python interface for interacting with the xAI Grok API, supporting chat completions and streaming, mimicking the OpenAIModel interface.
+"""
 import requests
 import json
 from typing import Dict, Any, Optional, List, Iterator
@@ -5,16 +9,32 @@ from typing import Dict, Any, Optional, List, Iterator
 class GrokModel:
     """
     A model wrapper for xAI Grok API that mimics the OpenAIModel interface.
+
+    Attributes:
+        api_key (str): The API key for authenticating with the xAI Grok API.
+        model_id (str): The Grok model to use (e.g., 'grok-3', 'grok-4').
+        params (dict): Additional parameters for the API call.
+        base_url (str): The base URL for the xAI Grok API.
+
+    Methods:
+        __init__(client_args, model_id, params): Initialize the Grok model.
+        chat_completion(messages, **kwargs): Send a chat completion request to xAI Grok API.
+        stream(*args, **kwargs): Async stream chat completion responses (non-streaming implementation).
+        __call__(messages, **kwargs): Convenience method to call chat_completion.
     """
     
-    def __init__(self, client_args: Dict[str, Any], model_id: str = "grok-3", params: Optional[Dict[str, Any]] = None):
+    def __init__(self, client_args: Dict[str, Any], model_id: str = "grok-4-0709", params: Optional[Dict[str, Any]] = None):
         """
+        Purpose:
         Initialize the Grok model.
-        
         Args:
-            client_args: Dictionary containing API key and other client arguments
-            model_id: The Grok model to use (grok-4 or grok-3)
-            params: Additional parameters for the API call
+            client_args (dict): Dictionary containing API key and other client arguments.
+            model_id (str): The Grok model to use (grok-4 or grok-3).
+            params (dict, optional): Additional parameters for the API call.
+        Returns:
+            None
+        Exceptions:
+            Raises ValueError if API key is missing in client_args.
         """
         self.api_key = client_args.get("api_key")
         if not self.api_key:
@@ -26,14 +46,15 @@ class GrokModel:
         
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """
+        Purpose:
         Send a chat completion request to xAI Grok API.
-        
         Args:
-            messages: List of message dictionaries with 'role' and 'content'
-            **kwargs: Additional parameters to override default params
-            
+            messages (list): List of message dictionaries with 'role' and 'content'.
+            **kwargs: Additional parameters to override default params.
         Returns:
-            Dictionary containing the API response
+            dict: API response from Grok.
+        Exceptions:
+            Raises TimeoutError, ConnectionError, or generic Exception on request failure.
         """
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -90,8 +111,16 @@ class GrokModel:
     
     async def stream(self, *args, **kwargs):
         """
+        Purpose:
         Async stream chat completion responses (non-streaming implementation).
         Accepts arbitrary arguments for compatibility with strands library.
+        Args:
+            *args: Positional arguments (messages list expected as first argument).
+            **kwargs: Keyword arguments (messages list can be provided as 'messages').
+        Returns:
+            Generator: Yields the API response from Grok.
+        Exceptions:
+            Raises ValueError if no messages are provided.
         """
         messages = None
         if args:
@@ -105,6 +134,14 @@ class GrokModel:
     
     def __call__(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """
+        Purpose:
         Convenience method to call chat_completion.
+        Args:
+            messages (list): List of message dictionaries with 'role' and 'content'.
+            **kwargs: Additional parameters to override default params.
+        Returns:
+            dict: API response from Grok.
+        Exceptions:
+            Same as chat_completion.
         """
         return self.chat_completion(messages, **kwargs) 
